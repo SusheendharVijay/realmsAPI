@@ -34,7 +34,7 @@ model VoteRecord {
 
 model RealmLatestTimeStamp {
     realmPubKey  String @unique @db.VarChar(100)
-    latestTimeStamp BigInt
+    latestTimeStamp BigInt @default(0)
 }
 
 enum VoteRecordVersion {

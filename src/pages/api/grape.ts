@@ -16,6 +16,7 @@ import {
   getAllGovernances,
   GovernanceAccountType,
   YesNoVote,
+  ProposalState,
 } from "@solana/spl-governance";
 
 import { PublicKey, Connection } from "@solana/web3.js";
@@ -59,7 +60,7 @@ const grape = async (req: NextApiRequest, res: NextApiResponse) => {
     console.log("Filtered empty governances ✅");
 
     // Get all the proposals for each governance-----------------------------------
-    let realmProposals: ProgramAccount<Proposal>[] = [];
+    let realmProposalsRaw: ProgramAccount<Proposal>[] = [];
 
     for (let govern of governanceWithProposals) {
       const proposals = await getProposalsByGovernance(
@@ -68,10 +69,54 @@ const grape = async (req: NextApiRequest, res: NextApiResponse) => {
         govern.pubkey
       );
 
-      realmProposals = realmProposals.concat(proposals);
+      realmProposalsRaw = realmProposalsRaw.concat(proposals);
     }
 
-    console.log("Get all proposals for each governance ✅");
+    console.log("Got all proposals for each governance ✅");
+
+    // Filtering out proposals that aren't done with voting ---------------------------------------
+    const realmProposals = realmProposalsRaw.filter(
+      (prop) =>
+        prop.account.state !== ProposalState.Voting &&
+        prop.account.state !== ProposalState.Cancelled &&
+        prop.account.state !== ProposalState.Draft &&
+        prop.account.state !== ProposalState.SigningOff
+    );
+
+    console.log("Filtered out proposals that aren't done with voting ✅");
+
+    const prevTimestampRaw = await prisma.realmLatestTimeStamp.findUnique({
+      where: {
+        realmPubKey: grapePubkey.toBase58(),
+      },
+    });
+
+    const prevTimestamp = prevTimestampRaw
+      ? Number(prevTimestampRaw.latestTimeStamp)
+      : 0;
+
+    console.log("db time", prevTimestamp);
+
+    const newProposals = realmProposals.filter(
+      (prop) => prop.account.draftAt.toNumber() > prevTimestamp
+    );
+
+    console.log("Filtered out old proposals ✅");
+
+    if (newProposals.length === 0) {
+      console.log("No new proposals, db up to date");
+      return res.status(200).json({ success: true });
+    }
+
+    const latestTimeStamp = newProposals.reduce(
+      (latest: number, proposal: ProgramAccount<Proposal>) =>
+        proposal.account.draftAt.toNumber() > latest
+          ? proposal.account.draftAt.toNumber()
+          : latest,
+      0
+    );
+
+    console.log("latest", latestTimeStamp);
 
     // Get all the vote records for each proposal----------------------------------
     let realmVoteRecords: ProgramAccount<VoteRecord>[] = [];
@@ -113,8 +158,21 @@ const grape = async (req: NextApiRequest, res: NextApiResponse) => {
     // let realmVoteData: Prisma.VoteRecordCreateInput[] =
     //   JSON.parse(realmVoteDataRaw);
 
-    const voteRecords = await prisma.voteRecord.createMany({
+    await prisma.voteRecord.createMany({
       data: realmVoteData,
+    });
+
+    await prisma.realmLatestTimeStamp.upsert({
+      where: {
+        realmPubKey: grapePubkey.toBase58(),
+      },
+      update: {
+        latestTimeStamp: latestTimeStamp,
+      },
+      create: {
+        realmPubKey: grapePubkey.toBase58(),
+        latestTimeStamp: latestTimeStamp,
+      },
     });
 
     return res.status(200).json({ success: true });
