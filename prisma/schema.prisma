@@ -20,6 +20,30 @@ model ShortLink {
 }
 
 
-model Example {
-    id String @id @default(cuid())
+model VoteRecord {
+    id        Int @id @default(autoincrement())
+    memberPubKey  String @db.VarChar(100)
+    realmPubKey  String @db.VarChar(100)
+    proposalPubkey String @db.VarChar(100)
+    proposalCreatedAt BigInt
+    vote           Vote 
+    voteWeight     BigInt 
+    version        VoteRecordVersion
+}
+
+
+model RealmLatestTimeStamp {
+    realmPubKey  String @unique @db.VarChar(100)
+    latestTimeStamp BigInt
+}
+
+enum VoteRecordVersion {
+    V1
+    V2
+}
+
+enum Vote {
+    Yes
+    No
+    Abstain
 }
