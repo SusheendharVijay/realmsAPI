@@ -57,36 +57,27 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     // Get all the proposals for each governance-----------------------------------
     // let realmProposalsRaw: ProgramAccount<Proposal>[] = [];
 
-    const realmProposalsRaw = await getAllProposals(governanceWithProposals);
+    const realmProposals = await getAllProposals(governanceWithProposals);
 
-    // Filtering out proposals that aren't done with voting ---------------------------------------
-    const realmProposals = realmProposalsRaw.filter(
-      (prop) =>
-        prop.account.state !== ProposalState.Voting &&
-        prop.account.state !== ProposalState.Cancelled &&
-        prop.account.state !== ProposalState.Draft &&
-        prop.account.state !== ProposalState.SigningOff
-    );
+    // console.log("Filtered out proposals that aren't done with voting ✅");
 
-    console.log("Filtered out proposals that aren't done with voting ✅");
+    // const prevTimestampRaw = await prisma.realmLatestTimeStamp.findUnique({
+    //   where: {
+    //     realmPubKey: grapePubkey.toBase58(),
+    //   },
+    // });
 
-    const prevTimestampRaw = await prisma.realmLatestTimeStamp.findUnique({
-      where: {
-        realmPubKey: grapePubkey.toBase58(),
-      },
-    });
+    // const prevTimestamp = prevTimestampRaw
+    //   ? Number(prevTimestampRaw.latestTimeStamp)
+    //   : 0;
 
-    const prevTimestamp = prevTimestampRaw
-      ? Number(prevTimestampRaw.latestTimeStamp)
-      : 0;
+    // console.log("db time", prevTimestamp);
 
-    console.log("db time", prevTimestamp);
+    // const newProposals = realmProposals.filter(
+    //   (prop) => prop.account.draftAt.toNumber() > prevTimestamp
+    // );
 
-    const newProposals = realmProposals.filter(
-      (prop) => prop.account.draftAt.toNumber() > prevTimestamp
-    );
-
-    console.log("Filtered out old proposals ✅");
+    // console.log("Filtered out old proposals ✅");
 
     // if (newProposals.length === 0) {
     //   console.log("No new proposals, db up to date");
@@ -104,25 +95,8 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     // console.log("latest", latestTimeStamp);
 
     // // Get all the vote records for each proposal----------------------------------
-    // let realmVoteRecords: ProgramAccount<VoteRecord>[] = [];
 
-    // // TODO: filter out the proposals that have no votes
-
-    // const proposalToCreateTime = new Map<string, number>();
-    // for (let proposal of realmProposals) {
-    //   proposalToCreateTime.set(
-    //     proposal.pubkey.toBase58(),
-    //     proposal.account.draftAt.toNumber()
-    //   );
-    //   const voteRecords = await getGovernanceAccounts(
-    //     connection,
-    //     splProgramId,
-    //     VoteRecord,
-    //     [pubkeyFilter(1, proposal.pubkey)!]
-    //   );
-
-    //   realmVoteRecords = realmVoteRecords.concat(voteRecords);
-    // }
+    const realmVoteRecords = await getAllVoteRecords(realmProposals);
 
     // console.log("Got all vote records for each proposal ✅");
 
@@ -187,6 +161,36 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     const realmProposalsRaw = allProposals.reduce((acc, curr) =>
       acc.concat(curr)
     );
+    // Filtering out proposals that aren't done with voting ---------------------------------------
+    const realmProposals = realmProposalsRaw.filter(
+      (prop) =>
+        prop.account.state !== ProposalState.Voting &&
+        prop.account.state !== ProposalState.Cancelled &&
+        prop.account.state !== ProposalState.Draft &&
+        prop.account.state !== ProposalState.SigningOff
+    );
+
+    let end = performance.now();
+
+    console.log(`Got all proposals in ${(end - start) / 1000}secs ✅`);
+
+    return realmProposals;
+  }
+  async function getAllProposalsSlow(
+    governanceWithProposals: ProgramAccount<Governance>[]
+  ): Promise<ProgramAccount<Proposal>[]> {
+    let start = performance.now();
+    let realmProposalsRaw: ProgramAccount<Proposal>[] = [];
+
+    for (let govern of governanceWithProposals) {
+      const proposals = await getProposalsByGovernance(
+        connection,
+        splProgramId,
+        govern.pubkey
+      );
+
+      realmProposalsRaw = realmProposalsRaw.concat(proposals);
+    }
 
     let end = performance.now();
 
@@ -194,30 +198,39 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
 
     return realmProposalsRaw;
   }
-  async function getAllProposalsSlow(
-    governanceWithProposals: ProgramAccount<Governance>[]
-  ): Promise<ProgramAccount<Proposal>[]> {
+
+  async function getAllVoteRecords(
+    realmProposals: ProgramAccount<Proposal>[]
+  ): Promise<ProgramAccount<VoteRecord>[]> {
+    // TODO: filter out the proposals that have no votes
+
     let start = performance.now();
-    const allProposalPromises: Promise<ProgramAccount<Proposal>[]>[] = [];
-    for (let govern of governanceWithProposals) {
-      const proposals = getProposalsByGovernance(
+    const proposalToCreateTime = new Map<string, number>();
+    const allVoteRecordsPromises: Promise<ProgramAccount<VoteRecord>[]>[] = [];
+    for (let proposal of realmProposals) {
+      proposalToCreateTime.set(
+        proposal.pubkey.toBase58(),
+        proposal.account.draftAt.toNumber()
+      );
+      const voteRecords = getGovernanceAccounts(
         connection,
         splProgramId,
-        govern.pubkey
+        VoteRecord,
+        [pubkeyFilter(1, proposal.pubkey)!]
       );
-
-      allProposalPromises.push(proposals);
+      allVoteRecordsPromises.push(voteRecords);
     }
-    const allProposals = await Promise.all(allProposalPromises);
-    const realmProposalsRaw = allProposals.reduce((acc, curr) =>
+
+    const allVoteRecords = await Promise.all(allVoteRecordsPromises);
+    const realmVoteRecords = allVoteRecords.reduce((acc, curr) =>
       acc.concat(curr)
     );
 
     let end = performance.now();
 
-    console.log(`Got all proposals in ${(end - start) / 1000}secs ✅`);
+    console.log(`Got all vote records in ${(end - start) / 1000}secs ✅`);
 
-    return realmProposalsRaw;
+    return realmVoteRecords;
   }
 
   function getCreateInputData(
