@@ -55,86 +55,44 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     console.log("Filtered empty governances ✅");
 
     // Get all the proposals for each governance-----------------------------------
-    // let realmProposalsRaw: ProgramAccount<Proposal>[] = [];
-
     const realmProposals = await getAllProposals(governanceWithProposals);
 
-    // console.log("Filtered out proposals that aren't done with voting ✅");
+    const newProposals = await getNewProposals(realmProposals);
 
-    // const prevTimestampRaw = await prisma.realmLatestTimeStamp.findUnique({
-    //   where: {
-    //     realmPubKey: grapePubkey.toBase58(),
-    //   },
-    // });
+    console.log("Filtered out old proposals ✅");
 
-    // const prevTimestamp = prevTimestampRaw
-    //   ? Number(prevTimestampRaw.latestTimeStamp)
-    //   : 0;
+    if (newProposals.length === 0) {
+      console.log("No new proposals, db up to date");
+      return res.status(200).json({ success: true });
+    }
 
-    // console.log("db time", prevTimestamp);
+    const latestTimeStamp = newProposals.reduce(
+      (latest: number, proposal: ProgramAccount<Proposal>) =>
+        proposal.account.draftAt.toNumber() > latest
+          ? proposal.account.draftAt.toNumber()
+          : latest,
+      0
+    );
 
-    // const newProposals = realmProposals.filter(
-    //   (prop) => prop.account.draftAt.toNumber() > prevTimestamp
-    // );
+    console.log("latest", latestTimeStamp);
 
-    // console.log("Filtered out old proposals ✅");
+    // Get all the vote records for each proposal----------------------------------
+    const realmVoteRecords = await getAndStoreVoteRecords(realmProposals);
 
-    // if (newProposals.length === 0) {
-    //   console.log("No new proposals, db up to date");
-    //   return res.status(200).json({ success: true });
-    // }
+    await prisma.realmLatestTimeStamp.upsert({
+      where: {
+        realmPubKey: grapePubkey.toBase58(),
+      },
+      update: {
+        latestTimeStamp: latestTimeStamp,
+      },
+      create: {
+        realmPubKey: grapePubkey.toBase58(),
+        latestTimeStamp: latestTimeStamp,
+      },
+    });
 
-    // const latestTimeStamp = newProposals.reduce(
-    //   (latest: number, proposal: ProgramAccount<Proposal>) =>
-    //     proposal.account.draftAt.toNumber() > latest
-    //       ? proposal.account.draftAt.toNumber()
-    //       : latest,
-    //   0
-    // );
-
-    // console.log("latest", latestTimeStamp);
-
-    // // Get all the vote records for each proposal----------------------------------
-
-    const realmVoteRecords = await getAllVoteRecords(realmProposals);
-
-    // console.log("Got all vote records for each proposal ✅");
-
-    // // Store the data in the database
-    // let realmVoteData: Prisma.VoteRecordCreateInput[];
-    // realmVoteData = realmVoteRecords.map((record) =>
-    //   getCreateInputData(record, proposalToCreateTime)
-    // );
-
-    // // fs.writeFile(
-    // //   "./realmVoteData.json",
-    // //   JSON.stringify(realmVoteData),
-    // //   "utf-8",
-    // //   (err) => console.log
-    // // );
-
-    // // let realmVoteDataRaw = fs.readFileSync("./realmVoteData.json", "utf8");
-    // // let realmVoteData: Prisma.VoteRecordCreateInput[] =
-    // //   JSON.parse(realmVoteDataRaw);
-
-    // await prisma.voteRecord.createMany({
-    //   data: realmVoteData,
-    // });
-
-    // await prisma.realmLatestTimeStamp.upsert({
-    //   where: {
-    //     realmPubKey: grapePubkey.toBase58(),
-    //   },
-    //   update: {
-    //     latestTimeStamp: latestTimeStamp,
-    //   },
-    //   create: {
-    //     realmPubKey: grapePubkey.toBase58(),
-    //     latestTimeStamp: latestTimeStamp,
-    //   },
-    // });
-
-    // console.log(`Stored ${realmVoteData.length} in the database ✅`);
+    console.log(`Stored ${realmVoteRecords.length} records in the database ✅`);
 
     return res.status(200).json({ success: true });
   } catch (e) {
@@ -176,30 +134,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
 
     return realmProposals;
   }
-  async function getAllProposalsSlow(
-    governanceWithProposals: ProgramAccount<Governance>[]
-  ): Promise<ProgramAccount<Proposal>[]> {
-    let start = performance.now();
-    let realmProposalsRaw: ProgramAccount<Proposal>[] = [];
-
-    for (let govern of governanceWithProposals) {
-      const proposals = await getProposalsByGovernance(
-        connection,
-        splProgramId,
-        govern.pubkey
-      );
-
-      realmProposalsRaw = realmProposalsRaw.concat(proposals);
-    }
-
-    let end = performance.now();
-
-    console.log(`Got all proposals in ${(end - start) / 1000}secs ✅`);
-
-    return realmProposalsRaw;
-  }
-
-  async function getAllVoteRecords(
+  async function getAndStoreVoteRecords(
     realmProposals: ProgramAccount<Proposal>[]
   ): Promise<ProgramAccount<VoteRecord>[]> {
     // TODO: filter out the proposals that have no votes
@@ -226,11 +161,40 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
       acc.concat(curr)
     );
 
+    // Store the data in the database
+    let realmVoteData: Prisma.VoteRecordCreateInput[];
+    realmVoteData = realmVoteRecords.map((record) =>
+      getCreateInputData(record, proposalToCreateTime)
+    );
+
+    await prisma.voteRecord.createMany({
+      data: realmVoteData,
+    });
+
     let end = performance.now();
 
-    console.log(`Got all vote records in ${(end - start) / 1000}secs ✅`);
+    console.log(`Got all vote records in fast ${(end - start) / 1000}secs ✅`);
 
     return realmVoteRecords;
+  }
+
+  async function getNewProposals(
+    realmProposals: ProgramAccount<Proposal>[]
+  ): Promise<ProgramAccount<Proposal>[]> {
+    const prevTimestampRaw = await prisma.realmLatestTimeStamp.findUnique({
+      where: {
+        realmPubKey: grapePubkey.toBase58(),
+      },
+    });
+    const prevTimestamp = prevTimestampRaw
+      ? Number(prevTimestampRaw.latestTimeStamp)
+      : 0;
+    console.log("db time", prevTimestamp);
+    const newProposals = realmProposals.filter(
+      (prop) => prop.account.draftAt.toNumber() > prevTimestamp
+    );
+
+    return newProposals;
   }
 
   function getCreateInputData(
