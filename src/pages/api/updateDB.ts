@@ -69,7 +69,12 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
       select: {
         realmPubKey: true,
       },
+      where: {
+        subscribed: true,
+      },
     });
+
+    console.log("realmKeysData", realmKeysData);
 
     const realmKeys = realmKeysData.map((r) => r.realmPubKey);
 
@@ -142,6 +147,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
       create: {
         realmPubKey: realmKey.toBase58(),
         latestTimeStamp: latestTimeStamp,
+        subscribed: true,
       },
     });
 
