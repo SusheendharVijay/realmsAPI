@@ -25,25 +25,47 @@ import { performance } from "perf_hooks";
 import { PublicKey, Connection } from "@solana/web3.js";
 import { Prisma, Vote, VoteRecordVersion } from "@prisma/client";
 
+const RequestObject = z.object({
+  realmKeys: z.array(z.string().length(43)).nullish(),
+});
+
+type Request = z.infer<typeof RequestObject>;
+
 const splProgramId = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
 
-const grapePubkey = new PublicKey(
-  "By2sVGZXwfQq6rAiAM3rNPJ9iQfb5e2QhnF4YjJ4Bip"
-);
+const realmKey = new PublicKey("By2sVGZXwfQq6rAiAM3rNPJ9iQfb5e2QhnF4YjJ4Bip");
 
 const connection = new Connection("https://rpc.ankr.com/solana", "recent");
 
 const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
-    // const realm = await getRealm(connection, grapePubkey);
+    // const realm = await getRealm(connection, realmKey);
 
+    const { realmKeys } = RequestObject.parse(req.body);
+
+    if (!realmKeys) {
+      await updateAll();
+    }
+
+    await updateRealms(realmKeys!);
+
+    return res.status(200).json({ success: true });
+  } catch (e) {
+    console.log(e);
+
+    return res.status(200).json({ success: false });
+  }
+
+  async function updateAll() {}
+
+  async function updateRealm(realmKey: PublicKey) {
     // Get all governances for the realm------------------------------------
     const allGovernancesRaw = await getAllGovernances(
       connection,
       splProgramId,
-      grapePubkey
+      realmKey
     );
 
     console.log("Got all governances for the realm ✅");
@@ -64,7 +86,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
 
     if (newProposals.length === 0) {
       console.log("No new proposals, db up to date");
-      return res.status(200).json({ success: true });
+      return;
     }
 
     const latestTimeStamp = newProposals.reduce(
@@ -82,24 +104,27 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
 
     await prisma.realmLatestTimeStamp.upsert({
       where: {
-        realmPubKey: grapePubkey.toBase58(),
+        realmPubKey: realmKey.toBase58(),
       },
       update: {
         latestTimeStamp: latestTimeStamp,
       },
       create: {
-        realmPubKey: grapePubkey.toBase58(),
+        realmPubKey: realmKey.toBase58(),
         latestTimeStamp: latestTimeStamp,
       },
     });
 
     console.log(`Stored ${realmVoteRecords.length} records in the database ✅`);
+  }
+  async function updateRealms(realmKeys: string[]) {
+    const updateRealmPromises: Promise<void>[] = [];
 
-    return res.status(200).json({ success: true });
-  } catch (e) {
-    console.log(e);
+    for (const realmKey of realmKeys) {
+      updateRealmPromises.push(updateRealm(new PublicKey(realmKey)));
+    }
 
-    return res.status(200).json({ success: false });
+    await Promise.all(updateRealmPromises);
   }
 
   async function getAllProposals(
@@ -184,7 +209,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   ): Promise<ProgramAccount<Proposal>[]> {
     const prevTimestampRaw = await prisma.realmLatestTimeStamp.findUnique({
       where: {
-        realmPubKey: grapePubkey.toBase58(),
+        realmPubKey: realmKey.toBase58(),
       },
     });
     const prevTimestamp = prevTimestampRaw
@@ -223,7 +248,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
         : (voteRecord.account.getNoVoteWeight()?.toNumber() as number);
 
     return {
-      realmPubKey: grapePubkey.toBase58(),
+      realmPubKey: realmKey.toBase58(),
       memberPubKey: voteRecord.account.governingTokenOwner.toBase58(),
       proposalPubkey: voteRecord.account.proposal.toBase58(),
       vote,
