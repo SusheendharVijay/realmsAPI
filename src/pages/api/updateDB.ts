@@ -33,7 +33,12 @@ const grapePubkey = new PublicKey(
   "By2sVGZXwfQq6rAiAM3rNPJ9iQfb5e2QhnF4YjJ4Bip"
 );
 
-const connection = new Connection("https://rpc.ankr.com/solana", "recent");
+// https://rpc.ankr.com/solana
+//
+const connection = new Connection(
+  process.env.QUICKNODE_RPC as string,
+  "recent"
+);
 
 const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
