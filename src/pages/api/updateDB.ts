@@ -2,6 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import fs from "fs";
 import { prisma } from "../../server/db/client";
+import { z } from "zod";
 import {
   getGovernanceAccounts,
   TokenOwnerRecord,

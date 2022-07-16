@@ -37,6 +37,19 @@ model RealmLatestTimeStamp {
     latestTimeStamp BigInt @default(0)
 }
 
+
+model Realms {
+    pubKey  String @unique @db.VarChar(43)
+    name   String @db.VarChar(200)
+}
+
+
+model Proposal {
+    pubKey  String @unique @db.VarChar(43)
+    name    String @db.VarChar(200)
+    descriptionLink String @db.VarChar(2000)
+}
+
 enum VoteRecordVersion {
     V1
     V2
