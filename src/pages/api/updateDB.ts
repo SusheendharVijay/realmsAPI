@@ -134,7 +134,8 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     // Get all the vote records for each proposal---------------------------------
     const realmVoteRecords = await getAndStoreVoteRecords(
       realmProposals,
-      realmOwner
+      realmOwner,
+      realmKey
     );
 
     await prisma.realmLatestTimeStamp.upsert({
@@ -201,7 +202,8 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   }
   async function getAndStoreVoteRecords(
     realmProposals: ProgramAccount<Proposal>[],
-    realmOwner: PublicKey
+    realmOwner: PublicKey,
+    realmKey: PublicKey
   ): Promise<ProgramAccount<VoteRecord>[]> {
     // TODO: filter out the proposals that have no votes
 
@@ -230,7 +232,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     // Store the data in the database
     let realmVoteData: Prisma.VoteRecordCreateInput[];
     realmVoteData = realmVoteRecords.map((record) =>
-      prepareVoteRecord(record, proposalToCreateTime, realmOwner)
+      prepareVoteRecord(record, proposalToCreateTime, realmKey)
     );
 
     await prisma.voteRecord.createMany({
@@ -316,7 +318,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   function prepareVoteRecord(
     voteRecord: ProgramAccount<VoteRecord>,
     proposalToCreateTime: Map<string, number>,
-    realmOwner: PublicKey
+    realmKey: PublicKey
   ): Prisma.VoteRecordCreateInput {
     let vote: Vote;
     let voteWeight: number;
@@ -339,7 +341,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
         : (voteRecord.account.getNoVoteWeight()?.toNumber() as number);
 
     return {
-      realmPubKey: realmOwner.toBase58(),
+      realmPubKey: realmKey.toBase58(),
       memberPubKey: voteRecord.account.governingTokenOwner.toBase58(),
       proposalPubkey: voteRecord.account.proposal.toBase58(),
       vote,
