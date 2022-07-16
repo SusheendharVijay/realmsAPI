@@ -2,7 +2,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import fs from "fs";
 import { prisma } from "../../server/db/client";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import {
   getGovernanceAccounts,
   TokenOwnerRecord,
@@ -23,29 +23,31 @@ import {
 
 import { performance } from "perf_hooks";
 import { PublicKey, Connection } from "@solana/web3.js";
-import { Prisma, Vote, VoteRecordVersion } from "@prisma/client";
+import {
+  Prisma,
+  Vote,
+  VoteRecordVersion,
+  ProposalStatus,
+} from "@prisma/client";
 
 const RequestObject = z.object({
-  realmKeys: z.array(z.string().length(43)).nullish(),
+  realmKeys: z.array(z.string().length(44).or(z.string().length(43))),
 });
 
 type Request = z.infer<typeof RequestObject>;
 
-const splProgramId = new PublicKey(
-  "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
+// const connection = new Connection("https://rpc.ankr.com/solana", "recent");
+const connection = new Connection(
+  process.env.QUICKNODE_RPC as string,
+  "recent"
 );
-
-const realmKey = new PublicKey("By2sVGZXwfQq6rAiAM3rNPJ9iQfb5e2QhnF4YjJ4Bip");
-
-const connection = new Connection("https://rpc.ankr.com/solana", "recent");
 
 const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
-    // const realm = await getRealm(connection, realmKey);
-
     const { realmKeys } = RequestObject.parse(req.body);
 
-    if (!realmKeys) {
+    if (realmKeys.length === 0) {
+      console.log("Updating all");
       await updateAll();
     }
 
@@ -53,34 +55,59 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
 
     return res.status(200).json({ success: true });
   } catch (e) {
+    if (e instanceof ZodError) {
+      console.log(e.flatten());
+      return res.status(400).json({ success: false });
+    }
     console.log(e);
 
     return res.status(200).json({ success: false });
   }
 
-  async function updateAll() {}
+  async function updateAll() {
+    const realmKeysData = await prisma.realmLatestTimeStamp.findMany({
+      select: {
+        realmPubKey: true,
+      },
+    });
+
+    const realmKeys = realmKeysData.map((r) => r.realmPubKey);
+
+    await updateRealms(realmKeys);
+  }
 
   async function updateRealm(realmKey: PublicKey) {
     // Get all governances for the realm------------------------------------
+    const realm = await getRealm(connection, realmKey);
+
+    const realmOwner = realm.owner;
+
     const allGovernancesRaw = await getAllGovernances(
       connection,
-      splProgramId,
+      realmOwner,
       realmKey
     );
 
     console.log("Got all governances for the realm ✅");
-
     // filter out gov's without proposals-------------------------------------
     const governanceWithProposals = allGovernancesRaw.filter(
       (govern) => govern.account.proposalCount > 0
     );
 
     console.log("Filtered empty governances ✅");
+    console.log(`Found ${governanceWithProposals.length} governance accounts`);
 
     // Get all the proposals for each governance-----------------------------------
-    const realmProposals = await getAllProposals(governanceWithProposals);
+    const realmProposals = await getAllProposals(
+      governanceWithProposals,
+      realmOwner
+    );
 
-    const newProposals = await getNewProposals(realmProposals);
+    console.log("Got all proposals for each governance ✅");
+    const newProposals = await getNewProposals(realmProposals, realmKey);
+
+    await storeNewProposals(newProposals, realmKey);
+    console.log("Got new proposals ✅");
 
     console.log("Filtered out old proposals ✅");
 
@@ -99,8 +126,11 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
 
     console.log("latest", latestTimeStamp);
 
-    // Get all the vote records for each proposal----------------------------------
-    const realmVoteRecords = await getAndStoreVoteRecords(realmProposals);
+    // Get all the vote records for each proposal---------------------------------
+    const realmVoteRecords = await getAndStoreVoteRecords(
+      realmProposals,
+      realmOwner
+    );
 
     await prisma.realmLatestTimeStamp.upsert({
       where: {
@@ -128,20 +158,22 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   async function getAllProposals(
-    governanceWithProposals: ProgramAccount<Governance>[]
+    governanceWithProposals: ProgramAccount<Governance>[],
+    realmOwner: PublicKey
   ): Promise<ProgramAccount<Proposal>[]> {
     let start = performance.now();
     const allProposalPromises: Promise<ProgramAccount<Proposal>[]>[] = [];
     for (let govern of governanceWithProposals) {
       const proposals = getProposalsByGovernance(
         connection,
-        splProgramId,
+        realmOwner,
         govern.pubkey
       );
 
       allProposalPromises.push(proposals);
     }
     const allProposals = await Promise.all(allProposalPromises);
+    // console.log("all props", allProposals);
     const realmProposalsRaw = allProposals.reduce((acc, curr) =>
       acc.concat(curr)
     );
@@ -154,6 +186,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
         prop.account.state !== ProposalState.SigningOff
     );
 
+    console.log(`Got ${realmProposals.length} proposals ✅`);
     let end = performance.now();
 
     console.log(`Got all proposals in ${(end - start) / 1000}secs ✅`);
@@ -161,7 +194,8 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     return realmProposals;
   }
   async function getAndStoreVoteRecords(
-    realmProposals: ProgramAccount<Proposal>[]
+    realmProposals: ProgramAccount<Proposal>[],
+    realmOwner: PublicKey
   ): Promise<ProgramAccount<VoteRecord>[]> {
     // TODO: filter out the proposals that have no votes
 
@@ -175,7 +209,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
       );
       const voteRecords = getGovernanceAccounts(
         connection,
-        splProgramId,
+        realmOwner,
         VoteRecord,
         [pubkeyFilter(1, proposal.pubkey)!]
       );
@@ -190,7 +224,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     // Store the data in the database
     let realmVoteData: Prisma.VoteRecordCreateInput[];
     realmVoteData = realmVoteRecords.map((record) =>
-      getCreateInputData(record, proposalToCreateTime)
+      prepareVoteRecord(record, proposalToCreateTime, realmOwner)
     );
 
     await prisma.voteRecord.createMany({
@@ -205,11 +239,15 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   async function getNewProposals(
-    realmProposals: ProgramAccount<Proposal>[]
+    realmProposals: ProgramAccount<Proposal>[],
+    realmKey: PublicKey
   ): Promise<ProgramAccount<Proposal>[]> {
     const prevTimestampRaw = await prisma.realmLatestTimeStamp.findUnique({
       where: {
         realmPubKey: realmKey.toBase58(),
+      },
+      select: {
+        latestTimeStamp: true,
       },
     });
     const prevTimestamp = prevTimestampRaw
@@ -223,9 +261,56 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     return newProposals;
   }
 
-  function getCreateInputData(
+  async function storeNewProposals(
+    newProposals: ProgramAccount<Proposal>[],
+    realmKey: PublicKey
+  ) {
+    let proposalData: Prisma.ProposalCreateInput[];
+    proposalData = newProposals.map((proposal) =>
+      prepareProposals(proposal, realmKey)
+    );
+
+    await prisma.proposal.createMany({
+      data: proposalData,
+    });
+  }
+
+  function prepareProposals(
+    proposal: ProgramAccount<Proposal>,
+    realmKey: PublicKey
+  ): Prisma.ProposalCreateInput {
+    let state: ProposalStatus;
+
+    if (proposal.account.state === ProposalState.Succeeded) {
+      state = "Succeeded";
+    } else if (proposal.account.state === ProposalState.Defeated) {
+      state = "Defeated";
+    } else if (proposal.account.state === ProposalState.Executing) {
+      state = "Executing";
+    } else if (proposal.account.state === ProposalState.ExecutingWithErrors) {
+      state = "ExecutingWithErrors";
+    } else if (proposal.account.state === ProposalState.Completed) {
+      state = "Completed";
+    } else {
+      state = "Unknown";
+    }
+
+    return {
+      pubKey: proposal.pubkey.toBase58(),
+      createdAt: proposal.account.draftAt.toNumber(),
+      state,
+      name: proposal.account.name,
+      descriptionLink: proposal.account.descriptionLink,
+      createdBy: proposal.account.tokenOwnerRecord.toBase58(),
+      governancePubKey: proposal.account.governance.toBase58(),
+      realmPubKey: realmKey.toBase58(),
+    };
+  }
+
+  function prepareVoteRecord(
     voteRecord: ProgramAccount<VoteRecord>,
-    proposalToCreateTime: Map<string, number>
+    proposalToCreateTime: Map<string, number>,
+    realmOwner: PublicKey
   ): Prisma.VoteRecordCreateInput {
     let vote: Vote;
     let voteWeight: number;
@@ -248,7 +333,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
         : (voteRecord.account.getNoVoteWeight()?.toNumber() as number);
 
     return {
-      realmPubKey: realmKey.toBase58(),
+      realmPubKey: realmOwner.toBase58(),
       memberPubKey: voteRecord.account.governingTokenOwner.toBase58(),
       proposalPubkey: voteRecord.account.proposal.toBase58(),
       vote,
