@@ -28,29 +28,67 @@ model VoteRecord {
     proposalCreatedAt BigInt
     vote           Vote 
     voteWeight     BigInt 
-    version        VoteRecordVersion
-}
-
-
-model RealmLatestTimeStamp {
-    realmPubKey  String @unique @db.VarChar(100)
-    latestTimeStamp BigInt @default(0)
+    version        GoveranceAccountVersion
 }
 
 
 model Realms {
-    pubKey  String @unique @db.VarChar(43)
-    name   String @db.VarChar(200)
+    pubkey  String @unique @db.VarChar(50)
+    name   String @db.VarChar(100)
+    owner String @db.VarChar(50)
+    authority String @db.VarChar(50)
+    communityMint String @db.VarChar(50)
+    councilMint String @db.VarChar(50)
+    version       GoveranceAccountVersion
+    latestTimeStamp BigInt @default(0)
+    subscribed     Boolean @default(true)
 }
+
+
 
 
 model Proposal {
-    pubKey  String @unique @db.VarChar(43)
+    pubKey  String @unique @db.VarChar(50)
     name    String @db.VarChar(200)
     descriptionLink String @db.VarChar(2000)
+    createdBy String @db.VarChar(50)
+    createdAt BigInt
+    state ProposalStatus
+    governancePubKey String @db.VarChar(50)
+    realmPubKey String @db.VarChar(50)
 }
 
-enum VoteRecordVersion {
+
+enum ProposalStatus {
+
+ 
+    /// Voting ended with success
+    Succeeded
+
+    /// Voting on Proposal succeeded and now instructions are being executed
+    /// Proposal enter this state when first instruction is executed and leaves when the last instruction is executed
+    Executing
+
+    /// Completed
+    Completed
+
+    /// Defeated
+    Defeated
+
+ 
+
+    /// Same as Executing but indicates some instructions failed to execute
+    /// Proposal can't be transitioned from ExecutingWithErrors to Completed state
+    ExecutingWithErrors
+
+    // /// The Proposal was vetoed
+    // Vetoed
+
+    // Unknown (shouldn't happen)
+    Unknown
+}
+
+enum  GoveranceAccountVersion {
     V1
     V2
 }
