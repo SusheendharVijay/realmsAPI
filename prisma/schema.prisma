@@ -28,21 +28,23 @@ model VoteRecord {
     proposalCreatedAt BigInt
     vote           Vote 
     voteWeight     BigInt 
-    version        VoteRecordVersion
+    version        GoveranceAccountVersion
 }
 
 
-model RealmLatestTimeStamp {
-    realmPubKey  String @unique @db.VarChar(100)
+model Realms {
+    pubkey  String @unique @db.VarChar(50)
+    name   String @db.VarChar(100)
+    owner String @db.VarChar(50)
+    authority String @db.VarChar(50)
+    communityMint String @db.VarChar(50)
+    councilMint String @db.VarChar(50)
+    version       GoveranceAccountVersion
     latestTimeStamp BigInt @default(0)
     subscribed     Boolean @default(true)
 }
 
 
-model Realms {
-    pubKey  String @unique @db.VarChar(50)
-    name   String @db.VarChar(200)
-}
 
 
 model Proposal {
@@ -86,7 +88,7 @@ enum ProposalStatus {
     Unknown
 }
 
-enum VoteRecordVersion {
+enum  GoveranceAccountVersion {
     V1
     V2
 }

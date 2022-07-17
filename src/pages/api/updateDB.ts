@@ -19,6 +19,7 @@ import {
   YesNoVote,
   ProposalState,
   Governance,
+  Realm,
 } from "@solana/spl-governance";
 
 import { performance } from "perf_hooks";
@@ -26,7 +27,7 @@ import { PublicKey, Connection } from "@solana/web3.js";
 import {
   Prisma,
   Vote,
-  VoteRecordVersion,
+  GoveranceAccountVersion,
   ProposalStatus,
 } from "@prisma/client";
 
@@ -65,9 +66,9 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   async function updateAll() {
-    const realmKeysData = await prisma.realmLatestTimeStamp.findMany({
+    const realmKeysData = await prisma.realms.findMany({
       select: {
-        realmPubKey: true,
+        pubkey: true,
       },
       where: {
         subscribed: true,
@@ -76,7 +77,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
 
     console.log("realmKeysData", realmKeysData);
 
-    const realmKeys = realmKeysData.map((r) => r.realmPubKey);
+    const realmKeys = realmKeysData.map((r) => r.pubkey);
 
     await updateRealms(realmKeys);
   }
@@ -138,19 +139,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
       realmKey
     );
 
-    await prisma.realmLatestTimeStamp.upsert({
-      where: {
-        realmPubKey: realmKey.toBase58(),
-      },
-      update: {
-        latestTimeStamp: latestTimeStamp,
-      },
-      create: {
-        realmPubKey: realmKey.toBase58(),
-        latestTimeStamp: latestTimeStamp,
-        subscribed: true,
-      },
-    });
+    await storeRealmInfo(realm, latestTimeStamp);
 
     console.log(`Stored ${realmVoteRecords.length} records in the database ✅`);
   }
@@ -250,9 +239,9 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
     realmProposals: ProgramAccount<Proposal>[],
     realmKey: PublicKey
   ): Promise<ProgramAccount<Proposal>[]> {
-    const prevTimestampRaw = await prisma.realmLatestTimeStamp.findUnique({
+    const prevTimestampRaw = await prisma.realms.findUnique({
       where: {
-        realmPubKey: realmKey.toBase58(),
+        pubkey: realmKey.toBase58(),
       },
       select: {
         latestTimeStamp: true,
@@ -322,7 +311,7 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   ): Prisma.VoteRecordCreateInput {
     let vote: Vote;
     let voteWeight: number;
-    let version: VoteRecordVersion;
+    let version: GoveranceAccountVersion;
 
     if (voteRecord.account.accountType === GovernanceAccountType.VoteRecordV1) {
       version = "V1";
@@ -351,6 +340,37 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
         voteRecord.account.proposal.toBase58()
       )!,
     };
+  }
+
+  function storeRealmInfo(
+    realm: ProgramAccount<Realm>,
+    latestTimeStamp: number
+  ) {
+    return prisma.realms.upsert({
+      where: {
+        pubkey: realm.pubkey.toBase58(),
+      },
+      update: {
+        latestTimeStamp,
+      },
+      create: {
+        pubkey: realm.pubkey.toBase58(),
+        latestTimeStamp,
+        owner: realm.owner.toBase58(),
+        authority: realm.account.authority
+          ? realm.account.authority.toBase58()
+          : "N/A",
+        communityMint: realm.account.communityMint.toBase58(),
+        councilMint: realm.account.config.councilMint
+          ? realm.account.config.councilMint.toBase58()
+          : "N/A",
+        name: realm.account.name,
+        version:
+          realm.account.accountType === GovernanceAccountType.RealmV1
+            ? "V1"
+            : "V2",
+      },
+    });
   }
 };
 

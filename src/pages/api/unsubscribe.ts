@@ -6,8 +6,8 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime";
 const unsubscribe = async (req: NextApiRequest, res: NextApiResponse) => {
   const { realmPubKey } = req.body;
   try {
-    const update = await prisma.realmLatestTimeStamp.update({
-      where: { realmPubKey },
+    const update = await prisma.realms.update({
+      where: { pubkey: realmPubKey },
       data: {
         subscribed: false,
       },
