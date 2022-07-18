@@ -35,15 +35,12 @@ const RequestObject = z.object({
   realmKeys: z.array(z.string().length(44).or(z.string().length(43))),
 });
 
-type Request = z.infer<typeof RequestObject>;
-
-// const connection = new Connection("https://rpc.ankr.com/solana", "recent");
 const connection = new Connection(
   process.env.QUICKNODE_RPC as string,
   "recent"
 );
 
-const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
+const addOrUpdate = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
     const { realmKeys } = RequestObject.parse(req.body);
 
@@ -374,4 +371,4 @@ const updateDB = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 };
 
-export default updateDB;
+export default addOrUpdate;
