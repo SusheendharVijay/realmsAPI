@@ -223,6 +223,7 @@ const addOrUpdate = async (req: NextApiRequest, res: NextApiResponse) => {
 
     await prisma.voteRecord.createMany({
       data: realmVoteData,
+      skipDuplicates: true,
     });
 
     let end = performance.now();
@@ -266,6 +267,7 @@ const addOrUpdate = async (req: NextApiRequest, res: NextApiResponse) => {
 
     await prisma.proposal.createMany({
       data: proposalData,
+      skipDuplicates: true,
     });
   }
 
