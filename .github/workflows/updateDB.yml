@@ -1,0 +1,16 @@
+# .github/workflows/updateDB.yml
+name: Update info for all realms in DB 
+
+on:
+  schedule:
+    # Runs "at minute 55 past every hour" (see https://crontab.guru)
+    - cron: '35 14 * * *'
+
+jobs:
+  build:
+    name: Update
+    runs-on: ubuntu-latest
+    steps:
+      - name: cURL request
+        # Hit the webhook endpoint to rebuild  from the "main" branch
+        run: curl -X POST -d { "realmKeys":[]} https://realms-api.vercel.app/api/addOrUpdate
