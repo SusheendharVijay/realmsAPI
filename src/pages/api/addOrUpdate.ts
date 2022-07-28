@@ -20,6 +20,7 @@ import {
   ProposalState,
   Governance,
   Realm,
+  getTokenOwnerRecord,
 } from "@solana/spl-governance";
 
 import { performance } from "perf_hooks";
@@ -260,10 +261,11 @@ const addOrUpdate = async (req: NextApiRequest, res: NextApiResponse) => {
     newProposals: ProgramAccount<Proposal>[],
     realmKey: PublicKey
   ) {
-    let proposalData: Prisma.ProposalCreateInput[];
-    proposalData = newProposals.map((proposal) =>
-      prepareProposals(proposal, realmKey)
+    const proposalDataPromises = newProposals.map((proposal) =>
+      prepareProposals(connection, proposal, realmKey)
     );
+
+    const proposalData = await Promise.all(proposalDataPromises);
 
     await prisma.proposal.createMany({
       data: proposalData,
@@ -271,10 +273,11 @@ const addOrUpdate = async (req: NextApiRequest, res: NextApiResponse) => {
     });
   }
 
-  function prepareProposals(
+  async function prepareProposals(
+    connection: Connection,
     proposal: ProgramAccount<Proposal>,
     realmKey: PublicKey
-  ): Prisma.ProposalCreateInput {
+  ): Promise<Prisma.ProposalCreateInput> {
     let state: ProposalStatus;
 
     if (proposal.account.state === ProposalState.Succeeded) {
@@ -291,13 +294,18 @@ const addOrUpdate = async (req: NextApiRequest, res: NextApiResponse) => {
       state = "Unknown";
     }
 
+    const tokenOwnerRecord = await getTokenOwnerRecord(
+      connection,
+      proposal.account.tokenOwnerRecord
+    );
+
     return {
       pubKey: proposal.pubkey.toBase58(),
       createdAt: proposal.account.draftAt.toNumber(),
       state,
       name: proposal.account.name,
       descriptionLink: proposal.account.descriptionLink,
-      createdBy: proposal.account.tokenOwnerRecord.toBase58(),
+      createdBy: tokenOwnerRecord.account.governingTokenOwner.toBase58(),
       governancePubKey: proposal.account.governance.toBase58(),
       realmPubKey: realmKey.toBase58(),
     };
