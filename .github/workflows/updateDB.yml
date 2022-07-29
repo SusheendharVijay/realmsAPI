@@ -1,14 +1,15 @@
-name: Update info for all realms in DB 
+# name: Update info for all realms in DB 
 
-on:
-  schedule:
-    - cron: '0-59 * * * 0-6'
+# on:
+#   schedule:
+#     - cron: '0-59 * * * 0-6'
 
 
-jobs:
-  build:
-    name: Update
-    runs-on: ubuntu-latest
-    steps:
-      - name: cURL request
-        run: curl --header "Content-Type:application/json" --request POST --data '{"realmKeys":[]}' https://realms-api.vercel.app/api/addOrUpdate
+
+# jobs:
+#   build:
+#     name: Update
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: cURL request
+#         run: curl --header "Content-Type:application/json" --request POST --data '{"realmKeys":[]}' https://realms-api.vercel.app/api/addOrUpdate
