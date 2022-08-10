@@ -1,5 +1,6 @@
 import { getKeypair } from "../../utils/general";
 import { NextApiRequest, NextApiResponse } from "next";
+import { z } from "zod";
 
 import {
   withCreateProposal,
@@ -25,6 +26,7 @@ import {
   TransactionInstruction,
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
+  sendAndConfirmRawTransaction,
 } from "@solana/web3.js";
 
 import {
@@ -42,19 +44,6 @@ const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
 
-// const MULTISIG_REALM = new PublicKey(
-//   "LqtG6VnoH8tGgaQYQwdeTShUXNhbc4T52kBwUhCsQuS"
-// );
-
-// const COUNCIL_MINT = new PublicKey(
-//   "AwyizDJkwRutTsViseeZHP1y34jKBcqgpzRGW3Ued6B8"
-// );
-
-// const COUNCIL_MINT_GOVERNANCE = new PublicKey(
-//   "4irjHXNaJkSQuDK9KqwfTmjUcBXDswpXf8iSxuR6NtmT"
-// );
-
-// const DAO_WALLET = new PublicKey("jNKZfvi5oHpLKAC5PFWHmTBkmor9td4EC5AXhjQE9SG");
 const MULTISIG_REALM = new PublicKey(
   "Bcu1boQ1RBxRPQvAdQtyacGFmJ76Yq9iu1MkW6JnwuS4"
 );
@@ -70,12 +59,24 @@ const COUNCIL_MINT_GOVERNANCE = new PublicKey(
 const DAO_WALLET = new PublicKey(
   "2rAaREc7BE753sXUW6bd9vbn1NsLEz8VZraZTTv4WeeB"
 );
-const TEST_MINT = new PublicKey("EcJxapPGbiWgsQ2f4EiZiw6uekDUcbVo5qctvvLwZ82n");
+
+const TEST_MINT = new PublicKey("GqvxqxFVUAVbujnTyzvwrLDijJQ5oMTb8KU3AizQrSLs");
 
 const dave = new PublicKey("4rpZQJHMz5UNWQEutZcLJi7hGaZgV3vnFoS1EqZFJRi2");
 
 const connection = getDevnetConnection();
-const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
+
+const InstructionSchema = z.object({
+  serializedTxn: z.array(z.number()),
+});
+
+const AddAdminSchema = z.object({
+  newAdmin: z.string(),
+});
+
+const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
+  const { newAdmin } = AddAdminSchema.parse(req.body);
+
   try {
     const LHT = getKeypair();
     const programVersion = await getGovernanceProgramVersion(
@@ -95,6 +96,7 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
     const governance = await getGovernance(connection, COUNCIL_MINT_GOVERNANCE);
 
     const proposalInstructions: TransactionInstruction[] = [];
+    const insertInstructions: TransactionInstruction[] = [];
 
     const proposalAddress = await withCreateProposal(
       proposalInstructions,
@@ -103,8 +105,8 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
       MULTISIG_REALM,
       COUNCIL_MINT_GOVERNANCE,
       tokenOwnerRecord[0]!.pubkey,
-      "Mint to proposal - " + governance.account.proposalCount,
-      "This mint 1 token to LHT",
+      `Add ${newAdmin} as a admin`,
+      `Created a proposal to add ${newAdmin} as a admin`,
       COUNCIL_MINT,
       LHT.publicKey,
       governance.account.proposalCount,
@@ -114,55 +116,82 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
       LHT.publicKey
     );
 
-    let associatedTokenAccount = await getAssociatedTokenAddress(
-      TEST_MINT,
-      LHT.publicKey
-    );
+    // let associatedTokenAccount = await getAssociatedTokenAddress(
+    //   TEST_MINT,
+    //   LHT.publicKey
+    // );
 
-    console.log(associatedTokenAccount);
+    // console.log(associatedTokenAccount);
 
-    const insertInstructions: TransactionInstruction[] = [];
+    // const insertInstructions: TransactionInstruction[] = [];
 
-    try {
-      const info = await getAccount(connection, associatedTokenAccount);
-      console.log(info);
-    } catch (e) {
-      insertInstructions.push(
-        createAssociatedTokenAccountInstruction(
-          DAO_WALLET,
-          associatedTokenAccount,
-          LHT.publicKey,
-          TEST_MINT
-        )
-      );
-    }
+    // try {
+    //   const info = await getAccount(connection, associatedTokenAccount);
+    //   console.log(info);
+    // } catch (e) {
+    //   insertInstructions.push(
+    //     createAssociatedTokenAccountInstruction(
+    //       DAO_WALLET,
+    //       associatedTokenAccount,
+    //       LHT.publicKey,
+    //       TEST_MINT
+    //     )
+    //   );
+    // }
 
-    insertInstructions.push(
-      createMintToInstruction(
-        TEST_MINT,
-        associatedTokenAccount,
-        COUNCIL_MINT_GOVERNANCE,
-        LAMPORTS_PER_SOL * 1
-      )
-    );
+    // insertInstructions.push(
+    //   createMintToInstruction(
+    //     TEST_MINT,
+    //     associatedTokenAccount,
+    //     COUNCIL_MINT_GOVERNANCE,
+    //     LAMPORTS_PER_SOL * 1
+    //   )
+    // );
 
-    console.log("insertInstructions", insertInstructions);
+    const input = JSON.stringify({
+      adminAuthority: COUNCIL_MINT_GOVERNANCE,
+      newAdmin: LHT.publicKey,
+      daoWallet: DAO_WALLET,
+    });
 
-    // const instructionData = createInstructionData(mintInstruction);
+    const apiUrl =
+      "https://lighthouse-solana-ddmqci1cq-lighthouse-dao.vercel.app/";
 
-    for (let ins of insertInstructions) {
+    const response = await fetch(`${apiUrl}/api/PartialSign-2/addAdmin`, {
+      method: "POST",
+      body: input,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+    const instructions = InstructionSchema.parse(await response.json());
+    // console.log(instructions);
+
+    const parsedTxn = Transaction.from(instructions.serializedTxn);
+    // console.log(parsedTxn.instructions);
+
+    // for (let txn of parsedTxn.instructions) {
+    //   console.log(txn);
+    // }
+
+    for (let ins of parsedTxn.instructions) {
       const instructionData = createInstructionData(ins);
-      console.log("instruction data", instructionData);
+
+      const signers = instructionData.accounts
+        .filter((acc) => acc.isSigner)
+        .map((acc) => acc.pubkey.toBase58());
+
+      console.log("Signers", signers);
 
       await withInsertTransaction(
-        proposalInstructions,
+        insertInstructions,
         TEST_PROGRAM_ID,
         2,
         COUNCIL_MINT_GOVERNANCE,
         proposalAddress,
         tokenOwnerRecord[0]!.pubkey,
         LHT.publicKey,
-        insertInstructions.indexOf(ins),
+        parsedTxn.instructions.indexOf(ins),
         0,
         0,
         [instructionData],
@@ -189,7 +218,7 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
     // console.log("signatoryRecord", signatoryRecord);
 
     withSignOffProposal(
-      proposalInstructions,
+      insertInstructions,
       TEST_PROGRAM_ID,
       2,
       MULTISIG_REALM,
@@ -200,15 +229,32 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
       undefined
     );
 
-    const txn = new Transaction().add(...proposalInstructions);
-    console.log(txn);
+    const txn1 = new Transaction().add(...proposalInstructions);
+    const txn2 = new Transaction().add(...insertInstructions);
 
-    const sig = await sendAndConfirmTransaction(connection, txn, [LHT]);
-    console.log(sig);
+    // const blockHashObj = await connection.getLatestBlockhash();
+    // txn.recentBlockhash = blockHashObj.blockhash;
+
+    // txn.feePayer = LHT.publicKey;
+
+    // const ins = txn.instructions.map(i => )
+
+    // const sig = await sendAndConfirmRawTransaction(
+    //   connection,
+    //   txn.serialize({
+    //     requireAllSignatures: false,
+    //     verifySignatures: true,
+    //   })
+    // );
+
+    const sig1 = await sendAndConfirmTransaction(connection, txn1, [LHT]);
+    const sig2 = await sendAndConfirmTransaction(connection, txn2, [LHT]);
+    console.log(sig1, sig2);
 
     //   const sig = "";
-    return res.json({
+    return res.status(200).json({
       succes: true,
+      //   result: instructions,
     });
   } catch (e) {
     console.log(e);
@@ -218,4 +264,4 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 };
 
-export default mintTokenTo;
+export default addPointsProposal;

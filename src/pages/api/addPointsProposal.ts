@@ -1,5 +1,6 @@
-import { getKeypair } from "./../../utils/general";
+import { getKeypair } from "../../utils/general";
 import { NextApiRequest, NextApiResponse } from "next";
+import { z } from "zod";
 
 import {
   withCreateProposal,
@@ -24,6 +25,7 @@ import {
   Transaction,
   TransactionInstruction,
   sendAndConfirmTransaction,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 
 import {
@@ -33,24 +35,9 @@ import {
   getAssociatedTokenAddress,
   getOrCreateAssociatedTokenAccount,
   getAccount,
+  mintTo,
 } from "@solana/spl-token";
 import { getDevnetConnection } from "../../utils/general";
-
-// const TEST_PROGRAM_ID = new PublicKey(
-//   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
-// );
-
-// const MULTISIG_REALM = new PublicKey(
-//   "8qfaVFsZJvo15hBHP66NsXYrnY1qSucayXyvSSCQeUdR"
-// );
-
-// const COUNCIL_MINT = new PublicKey(
-//   "FfhSaA7fX2UdMegBN4xd5CBX7nXn1QXNLsytXFfqfKJR"
-// );
-
-// const COUNCIL_MINT_GOVERNANCE = new PublicKey(
-//   "EVJqJx3XYpKeugoW1cD4ae2AFEnvvveZHjSrDgxC5qbG"
-// );
 
 const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
@@ -68,10 +55,22 @@ const COUNCIL_MINT_GOVERNANCE = new PublicKey(
   "4irjHXNaJkSQuDK9KqwfTmjUcBXDswpXf8iSxuR6NtmT"
 );
 
+const DAO_WALLET = new PublicKey("jNKZfvi5oHpLKAC5PFWHmTBkmor9td4EC5AXhjQE9SG");
+
+const TEST_MINT = new PublicKey("GqvxqxFVUAVbujnTyzvwrLDijJQ5oMTb8KU3AizQrSLs");
+
 const dave = new PublicKey("4rpZQJHMz5UNWQEutZcLJi7hGaZgV3vnFoS1EqZFJRi2");
 
 const connection = getDevnetConnection();
-const createProposal = async (req: NextApiRequest, res: NextApiResponse) => {
+
+const AddPointsSchema = z.object({
+  receiver: z.string(),
+  amount: z.number(),
+});
+
+const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
+  const { receiver, amount } = AddPointsSchema.parse(req.body);
+
   try {
     const LHT = getKeypair();
     const programVersion = await getGovernanceProgramVersion(
@@ -79,7 +78,7 @@ const createProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       TEST_PROGRAM_ID
     );
 
-    // console.log("programVersion", programVersion);
+    console.log("programVersion", programVersion);
 
     const tokenOwnerRecord = await getGovernanceAccounts(
       connection,
@@ -99,8 +98,8 @@ const createProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       MULTISIG_REALM,
       COUNCIL_MINT_GOVERNANCE,
       tokenOwnerRecord[0]!.pubkey,
-      "Lmao " + governance.account.proposalCount,
-      "This is a proposal to add a new member to the multisig",
+      `Add ${amount} points to ${receiver}, proposal-index: ${governance.account.proposalCount}`,
+      "Add points to given address",
       COUNCIL_MINT,
       LHT.publicKey,
       governance.account.proposalCount,
@@ -111,54 +110,43 @@ const createProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     );
 
     let associatedTokenAccount = await getAssociatedTokenAddress(
-      COUNCIL_MINT,
-      dave
+      TEST_MINT,
+      LHT.publicKey
     );
 
-    // console.log(associatedTokenAccount);
+    console.log(associatedTokenAccount);
 
     const insertInstructions: TransactionInstruction[] = [];
 
     try {
       const info = await getAccount(connection, associatedTokenAccount);
-      // console.log(info);
+      console.log(info);
     } catch (e) {
       insertInstructions.push(
         createAssociatedTokenAccountInstruction(
-          LHT.publicKey,
+          DAO_WALLET,
           associatedTokenAccount,
-          dave,
-          COUNCIL_MINT
+          LHT.publicKey,
+          TEST_MINT
         )
       );
     }
 
     insertInstructions.push(
       createMintToInstruction(
-        COUNCIL_MINT,
+        TEST_MINT,
         associatedTokenAccount,
         COUNCIL_MINT_GOVERNANCE,
-        1
+        LAMPORTS_PER_SOL * 1
       )
     );
 
-    console.log(
-      "Council: ",
-      COUNCIL_MINT.toBase58(),
-      "destination",
-      associatedTokenAccount.toBase58(),
-      "mint authority",
-      COUNCIL_MINT_GOVERNANCE.toBase58()
-    );
-
-    // // console.log("insertInstructions", insertInstructions);
-
-    // const instructionData = createInstructionData(mintInstruction);
+    console.log("insertInstructions", insertInstructions);
 
     for (let ins of insertInstructions) {
       const instructionData = createInstructionData(ins);
+      console.log("instruction data", instructionData);
 
-      // console.log("instruction data", instructionData);
       await withInsertTransaction(
         proposalInstructions,
         TEST_PROGRAM_ID,
@@ -174,25 +162,11 @@ const createProposal = async (req: NextApiRequest, res: NextApiResponse) => {
         LHT.publicKey
       );
     }
-    // await withInsertTransaction(
-    //   proposalInstructions,
-    //   TEST_PROGRAM_ID,
-    //   2,
-    //   COUNCIL_MINT_GOVERNANCE,
-    //   proposalAddress,
-    //   tokenOwnerRecord[0]!.pubkey,
-    //   LHT.publicKey,
-    //   governance.account.proposalCount,
-    //   0,
-    //   0,
-    //   [instructionData],
-    //   LHT.publicKey
-    // );
 
     const signRecord = await withAddSignatory(
       proposalInstructions,
       TEST_PROGRAM_ID,
-      2,
+      programVersion,
       proposalAddress,
       tokenOwnerRecord[0]!.pubkey,
       LHT.publicKey,
@@ -205,7 +179,7 @@ const createProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       proposalAddress,
       LHT.publicKey
     );
-    // // console.log("signatoryRecord", signatoryRecord);
+    // console.log("signatoryRecord", signatoryRecord);
 
     withSignOffProposal(
       proposalInstructions,
@@ -220,21 +194,21 @@ const createProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     );
 
     const txn = new Transaction().add(...proposalInstructions);
-    // console.log(txn);
+    console.log(txn);
 
     const sig = await sendAndConfirmTransaction(connection, txn, [LHT]);
-    // console.log(sig);
+    console.log(sig);
 
     //   const sig = "";
     return res.json({
       succes: true,
     });
   } catch (e) {
-    // console.log(e);
+    console.log(e);
     return res.json({
       succes: false,
     });
   }
 };
 
-export default createProposal;
+export default addPointsProposal;
