@@ -1,6 +1,8 @@
-import { getKeypair } from "../../utils/general";
+import { getKeypair } from "../../../utils/general";
 import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
+import bs58 from "bs58";
+import { WalletInfoSchema } from "../../../../lib/types";
 
 import {
   withCreateProposal,
@@ -27,20 +29,12 @@ import {
   Transaction,
   TransactionInstruction,
   sendAndConfirmTransaction,
-  LAMPORTS_PER_SOL,
+  Keypair,
   sendAndConfirmRawTransaction,
 } from "@solana/web3.js";
 
-import {
-  createAssociatedTokenAccount,
-  createAssociatedTokenAccountInstruction,
-  createMintToInstruction,
-  getAssociatedTokenAddress,
-  getOrCreateAssociatedTokenAccount,
-  getAccount,
-  mintTo,
-} from "@solana/spl-token";
-import { getDevnetConnection } from "../../utils/general";
+import { getDevnetConnection } from "../../../utils/general";
+import { Wallet } from "@project-serum/anchor";
 
 const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
@@ -58,10 +52,6 @@ const COUNCIL_MINT_GOVERNANCE = new PublicKey(
   "2mXqwYpN4fRPopEjyow8RRvQFMD7QwWTW3pxvZwjgaR6"
 );
 
-const DAO_WALLET = new PublicKey(
-  "2rAaREc7BE753sXUW6bd9vbn1NsLEz8VZraZTTv4WeeB"
-);
-
 const TEST_MINT = new PublicKey("GqvxqxFVUAVbujnTyzvwrLDijJQ5oMTb8KU3AizQrSLs");
 
 const dave = new PublicKey("4rpZQJHMz5UNWQEutZcLJi7hGaZgV3vnFoS1EqZFJRi2");
@@ -74,14 +64,25 @@ const InstructionSchema = z.object({
 
 const AddAdminSchema = z.object({
   newAdmin: z.string(),
+  proposer: z.string(),
 });
 
-const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { newAdmin } = AddAdminSchema.parse(req.body);
-  const newAdminPk = new PublicKey(newAdmin);
+type IWalletInfo = z.infer<typeof WalletInfoSchema>;
 
+const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
+    const { newAdmin, proposer } = AddAdminSchema.parse(req.body);
+
+    const { community } = req.query;
+    const newAdminPk = new PublicKey(newAdmin);
+    // const newAdminPk = Keypair.generate().publicKey;
+    const proposerPk = new PublicKey(proposer);
     const LHT = getKeypair();
+    const walletInfo = await getGasTank(community as string);
+    const gasTank: Keypair = Keypair.fromSecretKey(
+      bs58.decode(walletInfo.gasTankSecretKey)
+    );
+
     const programVersion = await getGovernanceProgramVersion(
       connection,
       TEST_PROGRAM_ID
@@ -93,7 +94,7 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       connection,
       TEST_PROGRAM_ID,
       TokenOwnerRecord,
-      [pubkeyFilter(1, MULTISIG_REALM)!, pubkeyFilter(65, LHT.publicKey)!]
+      [pubkeyFilter(1, MULTISIG_REALM)!, pubkeyFilter(65, proposerPk)!]
     );
 
     const governance = await getGovernance(connection, COUNCIL_MINT_GOVERNANCE);
@@ -106,8 +107,6 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       COUNCIL_MINT_GOVERNANCE
     );
 
-    console.log(treasuryAddr.toBase58());
-
     const proposalAddress = await withCreateProposal(
       proposalInstructions,
       TEST_PROGRAM_ID,
@@ -115,15 +114,16 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       MULTISIG_REALM,
       COUNCIL_MINT_GOVERNANCE,
       tokenOwnerRecord[0]!.pubkey,
-      `Add ${newAdmin} as a admin`,
-      `Created a proposal to add ${newAdmin} as a admin`,
+      // TODO: change to newAdmin later
+      `Add ${newAdminPk.toBase58()} as a admin`,
+      `Created a proposal to add ${newAdminPk.toBase58()} as a admin`,
       COUNCIL_MINT,
-      LHT.publicKey,
+      proposerPk,
       governance.account.proposalCount,
       VoteType.SINGLE_CHOICE,
       ["Approve"],
       true,
-      LHT.publicKey
+      gasTank.publicKey
     );
 
     const input = JSON.stringify({
@@ -136,7 +136,7 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       "https://lighthouse-solana-1cotf8onr-lighthouse-dao.vercel.app/";
 
     const response = await fetch(
-      `http://localhost:3000/api/Treasury/addAdmin`,
+      `http://localhost:3000/api/${community}/addAdmin`,
       {
         method: "POST",
         body: input,
@@ -146,15 +146,9 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       }
     );
     const instructions = InstructionSchema.parse(await response.json());
-    // console.log(instructions);
+    console.log("instructions:", instructions);
 
     const parsedTxn = Transaction.from(instructions.serializedTxn);
-    console.log(parsedTxn);
-    // console.log(parsedTxn.instructions);
-
-    // for (let txn of parsedTxn.instructions) {
-    //   console.log(txn);
-    // }
 
     for (let ins of parsedTxn.instructions) {
       const instructionData = createInstructionData(ins);
@@ -172,12 +166,12 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
         COUNCIL_MINT_GOVERNANCE,
         proposalAddress,
         tokenOwnerRecord[0]!.pubkey,
-        LHT.publicKey,
+        proposerPk,
         parsedTxn.instructions.indexOf(ins),
         0,
         0,
         [instructionData],
-        LHT.publicKey
+        gasTank.publicKey
       );
     }
 
@@ -187,15 +181,15 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       programVersion,
       proposalAddress,
       tokenOwnerRecord[0]!.pubkey,
-      LHT.publicKey,
-      LHT.publicKey,
-      LHT.publicKey
+      proposerPk,
+      proposerPk,
+      gasTank.publicKey
     );
 
     const signatoryRecord = await getSignatoryRecordAddress(
       TEST_PROGRAM_ID,
       proposalAddress,
-      LHT.publicKey
+      proposerPk
     );
     // console.log("signatoryRecord", signatoryRecord);
 
@@ -206,7 +200,7 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       MULTISIG_REALM,
       COUNCIL_MINT_GOVERNANCE,
       proposalAddress,
-      LHT.publicKey,
+      proposerPk,
       signatoryRecord,
       undefined
     );
@@ -214,29 +208,46 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     const txn1 = new Transaction().add(...proposalInstructions);
     const txn2 = new Transaction().add(...insertInstructions);
 
-    // const blockHashObj = await connection.getLatestBlockhash();
-    // txn.recentBlockhash = blockHashObj.blockhash;
+    console.log("txns: ", txn1, txn2);
 
-    // txn.feePayer = LHT.publicKey;
+    const blockHashObj = await connection.getLatestBlockhash();
+    // TODO: use nonce account later
+    txn1.recentBlockhash = blockHashObj.blockhash;
+    txn2.recentBlockhash = blockHashObj.blockhash;
+
+    txn1.feePayer = gasTank.publicKey;
+    txn2.feePayer = gasTank.publicKey;
+
+    txn1.partialSign(gasTank);
+    txn2.partialSign(gasTank);
+
+    // txn1.partialSign(LHT);
+    // txn2.partialSign(LHT);
 
     // const ins = txn.instructions.map(i => )
 
-    // const sig = await sendAndConfirmRawTransaction(
+    // const sig1 = await sendAndConfirmRawTransaction(
     //   connection,
-    //   txn.serialize({
-    //     requireAllSignatures: false,
+    //   txn1.serialize({
+    //     requireAllSignatures: true,
     //     verifySignatures: true,
     //   })
     // );
+    // const sig2 = await sendAndConfirmRawTransaction(
+    //   connection,
+    //   txn2.serialize({
+    //     requireAllSignatures: true,
+    //     verifySignatures: true,
+    //   })
+    // );
+    // console.log(sig1, sig2);
 
-    const sig1 = await sendAndConfirmTransaction(connection, txn1, [LHT]);
-    const sig2 = await sendAndConfirmTransaction(connection, txn2, [LHT]);
-    console.log(sig1, sig2);
-
-    //   const sig = "";
+    const config = {
+      requireAllSignatures: false,
+      verifySignatures: true,
+    };
     return res.status(200).json({
-      succes: true,
-      //   result: instructions,
+      serializedTxns: [txn1.serialize(config), txn2.serialize(config)],
     });
   } catch (e) {
     console.log(e);
@@ -244,6 +255,15 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       succes: false,
     });
   }
+};
+
+const getGasTank = async (community: string): Promise<IWalletInfo> => {
+  const res = await fetch(
+    `http://localhost:3000/api/${community}/info?key=${process.env.API_KEY}`
+  );
+
+  const info = WalletInfoSchema.parse(await res.json());
+  return info;
 };
 
 export default addPointsProposal;
