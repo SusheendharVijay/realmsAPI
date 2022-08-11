@@ -19,6 +19,8 @@ import {
   serializeInstructionToBase64,
   InstructionData,
   createInstructionData,
+  withCastVote,
+  getNativeTreasuryAddress,
 } from "@solana/spl-governance";
 import {
   PublicKey,
@@ -63,7 +65,7 @@ const DAO_WALLET = new PublicKey(
 const TEST_MINT = new PublicKey("GqvxqxFVUAVbujnTyzvwrLDijJQ5oMTb8KU3AizQrSLs");
 
 const dave = new PublicKey("4rpZQJHMz5UNWQEutZcLJi7hGaZgV3vnFoS1EqZFJRi2");
-
+const carol = new PublicKey("B6nau95gSNCtxMpZEYRNXScvszX7tDZkvkMNXXmwF6Q1");
 const connection = getDevnetConnection();
 
 const InstructionSchema = z.object({
@@ -76,6 +78,7 @@ const AddAdminSchema = z.object({
 
 const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
   const { newAdmin } = AddAdminSchema.parse(req.body);
+  const newAdminPk = new PublicKey(newAdmin);
 
   try {
     const LHT = getKeypair();
@@ -98,6 +101,13 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     const proposalInstructions: TransactionInstruction[] = [];
     const insertInstructions: TransactionInstruction[] = [];
 
+    const treasuryAddr = await getNativeTreasuryAddress(
+      TEST_PROGRAM_ID,
+      COUNCIL_MINT_GOVERNANCE
+    );
+
+    console.log(treasuryAddr.toBase58());
+
     const proposalAddress = await withCreateProposal(
       proposalInstructions,
       TEST_PROGRAM_ID,
@@ -116,58 +126,30 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       LHT.publicKey
     );
 
-    // let associatedTokenAccount = await getAssociatedTokenAddress(
-    //   TEST_MINT,
-    //   LHT.publicKey
-    // );
-
-    // console.log(associatedTokenAccount);
-
-    // const insertInstructions: TransactionInstruction[] = [];
-
-    // try {
-    //   const info = await getAccount(connection, associatedTokenAccount);
-    //   console.log(info);
-    // } catch (e) {
-    //   insertInstructions.push(
-    //     createAssociatedTokenAccountInstruction(
-    //       DAO_WALLET,
-    //       associatedTokenAccount,
-    //       LHT.publicKey,
-    //       TEST_MINT
-    //     )
-    //   );
-    // }
-
-    // insertInstructions.push(
-    //   createMintToInstruction(
-    //     TEST_MINT,
-    //     associatedTokenAccount,
-    //     COUNCIL_MINT_GOVERNANCE,
-    //     LAMPORTS_PER_SOL * 1
-    //   )
-    // );
-
     const input = JSON.stringify({
-      adminAuthority: COUNCIL_MINT_GOVERNANCE,
-      newAdmin: LHT.publicKey,
-      daoWallet: DAO_WALLET,
+      adminAuthority: treasuryAddr,
+      newAdmin: newAdminPk,
+      daoWallet: treasuryAddr,
     });
 
     const apiUrl =
-      "https://lighthouse-solana-ddmqci1cq-lighthouse-dao.vercel.app/";
+      "https://lighthouse-solana-1cotf8onr-lighthouse-dao.vercel.app/";
 
-    const response = await fetch(`${apiUrl}/api/PartialSign-2/addAdmin`, {
-      method: "POST",
-      body: input,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await fetch(
+      `http://localhost:3000/api/Treasury/addAdmin`,
+      {
+        method: "POST",
+        body: input,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
     const instructions = InstructionSchema.parse(await response.json());
     // console.log(instructions);
 
     const parsedTxn = Transaction.from(instructions.serializedTxn);
+    console.log(parsedTxn);
     // console.log(parsedTxn.instructions);
 
     // for (let txn of parsedTxn.instructions) {

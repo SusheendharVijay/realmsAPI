@@ -18,7 +18,7 @@ export const getDevnetConnection = (): Connection => {
 
 export const getKeypair = (): Keypair => {
   const LHT = Keypair.fromSecretKey(
-    bs58.decode(process.env.LHT_SECRET_KEY as string)
+    bs58.decode(process.env.NEXT_PUBLIC_LHT_SECRET_KEY as string)
   );
 
   return LHT;

@@ -18,6 +18,7 @@ import {
   serializeInstructionToBase64,
   InstructionData,
   createInstructionData,
+  getNativeTreasuryAddress,
 } from "@solana/spl-governance";
 import {
   PublicKey,
@@ -42,38 +43,40 @@ const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
 
-// const MULTISIG_REALM = new PublicKey(
-//   "LqtG6VnoH8tGgaQYQwdeTShUXNhbc4T52kBwUhCsQuS"
-// );
-
-// const COUNCIL_MINT = new PublicKey(
-//   "AwyizDJkwRutTsViseeZHP1y34jKBcqgpzRGW3Ued6B8"
-// );
-
-// const COUNCIL_MINT_GOVERNANCE = new PublicKey(
-//   "4irjHXNaJkSQuDK9KqwfTmjUcBXDswpXf8iSxuR6NtmT"
-// );
-
-// const DAO_WALLET = new PublicKey("jNKZfvi5oHpLKAC5PFWHmTBkmor9td4EC5AXhjQE9SG");
 const MULTISIG_REALM = new PublicKey(
-  "Bcu1boQ1RBxRPQvAdQtyacGFmJ76Yq9iu1MkW6JnwuS4"
+  "LqtG6VnoH8tGgaQYQwdeTShUXNhbc4T52kBwUhCsQuS"
 );
 
 const COUNCIL_MINT = new PublicKey(
-  "2Gc6KVGvJT8g3chxWLMCgdqNEt4Z1gdfNkZTQp5dRpoo"
+  "AwyizDJkwRutTsViseeZHP1y34jKBcqgpzRGW3Ued6B8"
 );
 
 const COUNCIL_MINT_GOVERNANCE = new PublicKey(
-  "2mXqwYpN4fRPopEjyow8RRvQFMD7QwWTW3pxvZwjgaR6"
+  "4irjHXNaJkSQuDK9KqwfTmjUcBXDswpXf8iSxuR6NtmT"
 );
 
-const DAO_WALLET = new PublicKey(
-  "2rAaREc7BE753sXUW6bd9vbn1NsLEz8VZraZTTv4WeeB"
-);
-const TEST_MINT = new PublicKey("EcJxapPGbiWgsQ2f4EiZiw6uekDUcbVo5qctvvLwZ82n");
+const DAO_WALLET = new PublicKey("jNKZfvi5oHpLKAC5PFWHmTBkmor9td4EC5AXhjQE9SG");
+// const MULTISIG_REALM = new PublicKey(
+//   "Bcu1boQ1RBxRPQvAdQtyacGFmJ76Yq9iu1MkW6JnwuS4"
+// );
+
+// const COUNCIL_MINT = new PublicKey(
+//   "2Gc6KVGvJT8g3chxWLMCgdqNEt4Z1gdfNkZTQp5dRpoo"
+// );
+
+// const COUNCIL_MINT_GOVERNANCE = new PublicKey(
+//   "2mXqwYpN4fRPopEjyow8RRvQFMD7QwWTW3pxvZwjgaR6"
+// );
+
+// const DAO_WALLET = new PublicKey(
+//   "2rAaREc7BE753sXUW6bd9vbn1NsLEz8VZraZTTv4WeeB"
+// );
+const TEST_MINT = new PublicKey("GqvxqxFVUAVbujnTyzvwrLDijJQ5oMTb8KU3AizQrSLs");
 
 const dave = new PublicKey("4rpZQJHMz5UNWQEutZcLJi7hGaZgV3vnFoS1EqZFJRi2");
+const bob = new PublicKey("9noZrM1K84NgYgJdzE1sKfbXG9Xie7KS1a2gM4BixhKj");
 
+const carol = new PublicKey("B6nau95gSNCtxMpZEYRNXScvszX7tDZkvkMNXXmwF6Q1");
 const connection = getDevnetConnection();
 const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
@@ -93,6 +96,10 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
     );
 
     const governance = await getGovernance(connection, COUNCIL_MINT_GOVERNANCE);
+    const treasuryAddr = await getNativeTreasuryAddress(
+      TEST_PROGRAM_ID,
+      COUNCIL_MINT_GOVERNANCE
+    );
 
     const proposalInstructions: TransactionInstruction[] = [];
 
@@ -116,7 +123,7 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
 
     let associatedTokenAccount = await getAssociatedTokenAddress(
       TEST_MINT,
-      LHT.publicKey
+      carol
     );
 
     console.log(associatedTokenAccount);
@@ -129,9 +136,9 @@ const mintTokenTo = async (req: NextApiRequest, res: NextApiResponse) => {
     } catch (e) {
       insertInstructions.push(
         createAssociatedTokenAccountInstruction(
-          DAO_WALLET,
+          new PublicKey("jNKZfvi5oHpLKAC5PFWHmTBkmor9td4EC5AXhjQE9SG"),
           associatedTokenAccount,
-          LHT.publicKey,
+          carol,
           TEST_MINT
         )
       );
