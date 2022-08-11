@@ -61,20 +61,29 @@ const connection = getDevnetConnection();
 const InstructionSchema = z.object({
   serializedTxn: z.array(z.number()),
 });
-
-const pubkeySchema = z.string().transform((v) => new PublicKey(v));
-
-const AddAdminSchema = z.object({
-  newAdmin: pubkeySchema,
-  proposer: pubkeySchema,
+const AddLogSchema = z.object({
+  receiver: z.string().transform((v) => new PublicKey(v)),
+  multisigAdmin: z.string().transform((v) => new PublicKey(v)),
+  amount: z.number(),
+  reason: z.string(),
+  tags: z.string(),
+  pointsBreakdown: z.string(),
+  proposer: z.string().transform((v) => new PublicKey(v)),
 });
 
-const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
+const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
-    const { newAdmin, proposer } = AddAdminSchema.parse(req.body);
+    const {
+      receiver,
+      amount,
+      reason,
+      tags,
+      pointsBreakdown,
+      proposer,
+      multisigAdmin,
+    } = AddLogSchema.parse(req.body);
 
     const { community } = req.query;
-    // const newAdmin = Keypair.generate().publicKey;
     const walletInfo = await getGasTank(community as string);
     const gasTank: Keypair = Keypair.fromSecretKey(
       bs58.decode(walletInfo.gasTankSecretKey)
@@ -97,11 +106,6 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     const proposalInstructions: TransactionInstruction[] = [];
     const insertInstructions: TransactionInstruction[] = [];
 
-    const treasuryAddr = await getNativeTreasuryAddress(
-      TEST_PROGRAM_ID,
-      COUNCIL_MINT_GOVERNANCE
-    );
-
     const proposalAddress = await withCreateProposal(
       proposalInstructions,
       TEST_PROGRAM_ID,
@@ -109,9 +113,8 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       MULTISIG_REALM,
       COUNCIL_MINT_GOVERNANCE,
       tokenOwnerRecord[0]!.pubkey,
-      // TODO: change to newAdmin later
-      `Add ${newAdmin.toBase58()} as a admin`,
-      `Created a proposal to add ${newAdmin.toBase58()} as a admin`,
+      `Add an attestation for ${receiver}`,
+      `Reason: ${reason}, amount: ${amount} Tags: ${tags}, Points Breakdown: ${pointsBreakdown}`,
       COUNCIL_MINT,
       proposer,
       governance.account.proposalCount,
@@ -122,16 +125,17 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     );
 
     const input = JSON.stringify({
-      adminAuthority: treasuryAddr,
-      newAdmin: newAdmin,
-      daoWallet: treasuryAddr,
+      receiver: receiver.toBase58(),
+      admin: multisigAdmin.toBase58(),
+      amount: amount,
+      reason: reason,
+      tags: tags,
+      pointsBreakdown: pointsBreakdown,
+      daoWallet: multisigAdmin.toBase58(),
     });
 
-    const apiUrl =
-      "https://lighthouse-solana-1cotf8onr-lighthouse-dao.vercel.app/";
-
     const response = await fetch(
-      `http://localhost:3000/api/${community}/addAdmin`,
+      `http://localhost:3000/api/${community}/addLog`,
       {
         method: "POST",
         body: input,
@@ -140,16 +144,13 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
         },
       }
     );
+
     const instructions = InstructionSchema.parse(await response.json());
 
     const parsedTxn = Transaction.from(instructions.serializedTxn);
 
     for (let ins of parsedTxn.instructions) {
       const instructionData = createInstructionData(ins);
-
-      // const signers = instructionData.accounts
-      //   .filter((acc) => acc.isSigner)
-      //   .map((acc) => acc.pubkey.toBase58());
 
       await withInsertTransaction(
         insertInstructions,
@@ -196,6 +197,7 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       undefined
     );
 
+    // Splitting them into 2 txn since it exceeds max size sometimes. Precautionary measure at this point.
     const txn1 = new Transaction().add(...proposalInstructions);
     const txn2 = new Transaction().add(...insertInstructions);
 
@@ -214,6 +216,16 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       requireAllSignatures: false,
       verifySignatures: true,
     };
+
+    // const sig1 = await sendAndConfirmRawTransaction(
+    //   connection,
+    //   txn1.serialize(config)
+    // );
+    // const sig2 = await sendAndConfirmRawTransaction(
+    //   connection,
+    //   txn2.serialize(config)
+    // );
+    // console.log(sig1, sig2);
     return res.status(200).json({
       serializedTxns: [txn1.serialize(config), txn2.serialize(config)],
     });
@@ -225,4 +237,4 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 };
 
-export default addPointsProposal;
+export default addLogProposal;

@@ -142,7 +142,6 @@ const PhantomTest: NextPage = () => {
   return (
     <div className="App">
       <header className="App-header">
-        <h2>Tutorial: Connect to Phantom Wallet</h2>
         {provider && (
           <button
             onClick={connectWallet}
@@ -164,18 +163,6 @@ const PhantomTest: NextPage = () => {
           </p>
         )}
         <button onClick={addAdmin}>Add admin</button>
-
-        <p>
-          Built by{" "}
-          <a
-            href="https://twitter.com/arealesramirez"
-            target="_blank"
-            rel="noreferrer"
-            className="twitter-link"
-          >
-            @arealesramirez
-          </a>
-        </p>
       </header>
     </div>
   );
