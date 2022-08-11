@@ -1,8 +1,11 @@
-import { getKeypair, getGasTank } from "../../../utils/general";
+import {
+  getKeypair,
+  getGasTank,
+  getDevnetConnection,
+} from "../../../utils/general";
 import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import bs58 from "bs58";
-import { WalletInfoSchema } from "../../../../lib/types";
 
 import {
   withCreateProposal,
@@ -11,30 +14,21 @@ import {
   getGovernanceAccounts,
   pubkeyFilter,
   VoteType,
-  CreateProposalArgs,
   withInsertTransaction,
   getGovernance,
   withAddSignatory,
-  withExecuteTransaction,
   withSignOffProposal,
   getSignatoryRecordAddress,
-  serializeInstructionToBase64,
-  InstructionData,
   createInstructionData,
-  withCastVote,
   getNativeTreasuryAddress,
 } from "@solana/spl-governance";
 import {
   PublicKey,
   Transaction,
   TransactionInstruction,
-  sendAndConfirmTransaction,
   Keypair,
   sendAndConfirmRawTransaction,
 } from "@solana/web3.js";
-
-import { getDevnetConnection } from "../../../utils/general";
-import { Wallet } from "@project-serum/anchor";
 
 const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
@@ -52,10 +46,6 @@ const COUNCIL_MINT_GOVERNANCE = new PublicKey(
   "2mXqwYpN4fRPopEjyow8RRvQFMD7QwWTW3pxvZwjgaR6"
 );
 
-const TEST_MINT = new PublicKey("GqvxqxFVUAVbujnTyzvwrLDijJQ5oMTb8KU3AizQrSLs");
-
-const dave = new PublicKey("4rpZQJHMz5UNWQEutZcLJi7hGaZgV3vnFoS1EqZFJRi2");
-const carol = new PublicKey("B6nau95gSNCtxMpZEYRNXScvszX7tDZkvkMNXXmwF6Q1");
 const connection = getDevnetConnection();
 
 const InstructionSchema = z.object({
@@ -67,11 +57,14 @@ const pubkeySchema = z.string().transform((v) => new PublicKey(v));
 const AddAdminSchema = z.object({
   newAdmin: pubkeySchema,
   proposer: pubkeySchema,
+  multisigAdmin: pubkeySchema,
 });
 
 const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
-    const { newAdmin, proposer } = AddAdminSchema.parse(req.body);
+    const { newAdmin, proposer, multisigAdmin } = AddAdminSchema.parse(
+      req.body
+    );
 
     const { community } = req.query;
     // const newAdmin = Keypair.generate().publicKey;
@@ -97,11 +90,6 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     const proposalInstructions: TransactionInstruction[] = [];
     const insertInstructions: TransactionInstruction[] = [];
 
-    const treasuryAddr = await getNativeTreasuryAddress(
-      TEST_PROGRAM_ID,
-      COUNCIL_MINT_GOVERNANCE
-    );
-
     const proposalAddress = await withCreateProposal(
       proposalInstructions,
       TEST_PROGRAM_ID,
@@ -122,9 +110,9 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     );
 
     const input = JSON.stringify({
-      adminAuthority: treasuryAddr,
+      adminAuthority: multisigAdmin,
       newAdmin: newAdmin,
-      daoWallet: treasuryAddr,
+      daoWallet: multisigAdmin,
     });
 
     const apiUrl =
@@ -210,10 +198,23 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     txn1.partialSign(gasTank);
     txn2.partialSign(gasTank);
 
+    // txn1.partialSign(LHT);
+    // txn2.partialSign(LHT);
     const config = {
       requireAllSignatures: false,
       verifySignatures: true,
     };
+
+    // const sig1 = await sendAndConfirmRawTransaction(
+    //   connection,
+    //   txn1.serialize(config)
+    // );
+    // const sig2 = await sendAndConfirmRawTransaction(
+    //   connection,
+    //   txn2.serialize(config)
+    // );
+    // console.log(sig1, sig2);
+
     return res.status(200).json({
       serializedTxns: [txn1.serialize(config), txn2.serialize(config)],
     });
