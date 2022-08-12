@@ -1,38 +1,14 @@
-import {
-  getKeypair,
-  getGasTank,
-  getDevnetConnection,
-} from "../../../utils/general";
+import { getGasTank, getDevnetConnection } from "../../../utils/general";
 import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import bs58 from "bs58";
 
-import {
-  withCreateProposal,
-  getGovernanceProgramVersion,
-  TokenOwnerRecord,
-  getGovernanceAccounts,
-  pubkeyFilter,
-  VoteType,
-  withInsertTransaction,
-  getGovernance,
-  withAddSignatory,
-  withSignOffProposal,
-  getSignatoryRecordAddress,
-  createInstructionData,
-  getNativeTreasuryAddress,
-  getRealm,
-  GovernanceAccount,
-  getAllGovernances,
-  Governance,
-  getGovernanceAccount,
-} from "@solana/spl-governance";
+import { withCreateProposal, VoteType } from "@solana/spl-governance";
 import {
   PublicKey,
   Transaction,
   TransactionInstruction,
   Keypair,
-  sendAndConfirmRawTransaction,
 } from "@solana/web3.js";
 import {
   getRealmInfo,
@@ -43,18 +19,6 @@ import {
 const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
-
-// const MULTISIG_REALM = new PublicKey(
-//   "Bcu1boQ1RBxRPQvAdQtyacGFmJ76Yq9iu1MkW6JnwuS4"
-// );
-
-// const COUNCIL_MINT = new PublicKey(
-//   "2Gc6KVGvJT8g3chxWLMCgdqNEt4Z1gdfNkZTQp5dRpoo"
-// );
-
-// const COUNCIL_MINT_GOVERNANCE = new PublicKey(
-//   "2mXqwYpN4fRPopEjyow8RRvQFMD7QwWTW3pxvZwjgaR6"
-// );
 
 const connection = getDevnetConnection();
 

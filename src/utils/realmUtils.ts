@@ -132,6 +132,7 @@ export const getSerializedTxns = async (
     requireAllSignatures: false,
     verifySignatures: true,
   };
+
   //   txn1.partialSign(LHT);
   //   txn2.partialSign(LHT);
 
