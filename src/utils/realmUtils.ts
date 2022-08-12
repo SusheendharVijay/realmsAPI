@@ -133,18 +133,18 @@ export const getSerializedTxns = async (
     verifySignatures: true,
   };
 
-  //   txn1.partialSign(LHT);
-  //   txn2.partialSign(LHT);
+  // txn1.partialSign(LHT);
+  // txn2.partialSign(LHT);
 
-  //   const sig1 = await sendAndConfirmRawTransaction(
-  //     connection,
-  //     txn1.serialize(config)
-  //   );
-  //   const sig2 = await sendAndConfirmRawTransaction(
-  //     connection,
-  //     txn2.serialize(config)
-  //   );
-  //   console.log(sig1, sig2);
+  // const sig1 = await sendAndConfirmRawTransaction(
+  //   connection,
+  //   txn1.serialize(config)
+  // );
+  // const sig2 = await sendAndConfirmRawTransaction(
+  //   connection,
+  //   txn2.serialize(config)
+  // );
+  // console.log(sig1, sig2);
 
   return [txn1.serialize(config), txn2.serialize(config)];
 };
