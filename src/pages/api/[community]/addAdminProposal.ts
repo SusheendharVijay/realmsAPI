@@ -89,7 +89,7 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     });
 
     const response = await fetch(
-      `http://localhost:3000/api/${community}/addAdmin`,
+      `https://lighthouse-solana-api.vercel.app/api/${community}/addAdmin`,
       {
         method: "POST",
         body: input,

@@ -21,7 +21,7 @@ export const getDevnetConnection = (): Connection => {
 };
 export const getGasTank = async (community: string): Promise<IWalletInfo> => {
   const res = await fetch(
-    `http://localhost:3000/api/${community}/info?key=${process.env.API_KEY}`
+    `https://lighthouse-solana-api.vercel.app/api/${community}/info?key=${process.env.API_KEY}`
   );
 
   const info = WalletInfoSchema.parse(await res.json());

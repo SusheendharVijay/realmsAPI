@@ -96,7 +96,7 @@ const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     });
 
     const response = await fetch(
-      `http://localhost:3000/api/${community}/addLog`,
+      `https://lighthouse-solana-api.vercel.app/api/${community}/addLog`,
       {
         method: "POST",
         body: input,
