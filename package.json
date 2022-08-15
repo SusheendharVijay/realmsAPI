@@ -2,6 +2,7 @@
   "name": "realm-stats",
   "version": "0.1.0",
   "private": true,
+  "proxy": "http://localhost:3000/",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,12 +12,15 @@
   },
   "dependencies": {
     "@prisma/client": "^4.0.0",
+    "@project-serum/anchor": "^0.25.0",
     "@solana/spl-governance": "^0.0.34",
+    "@solana/spl-token": "^0.2.0",
     "@solana/web3.js": "^1.47.4",
     "@trpc/client": "^9.25.3",
     "@trpc/next": "^9.25.3",
     "@trpc/react": "^9.25.3",
     "@trpc/server": "^9.25.3",
+    "bs58": "^5.0.0",
     "next": "12.2.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
