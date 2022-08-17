@@ -270,7 +270,7 @@ const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
 
     const blockHashObj = await connection.getLatestBlockhash();
     txn1.recentBlockhash = blockHashObj.blockhash;
-    // txn2.recentBlockhash = blockHashObj.blockhash;
+    txn2.recentBlockhash = blockHashObj.blockhash;
 
     const hash1 = await sendAndConfirmTransaction(connection, txn1, [
       gasTank,
