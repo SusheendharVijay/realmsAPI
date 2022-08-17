@@ -141,7 +141,7 @@ const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
       realmInstructions,
       TEST_PROGRAM_ID,
       PROGRAM_VERSION_V2,
-      `${communityName}-multisig-1`,
+      `${communityName}-multisig`,
       gasTank.publicKey,
       communityMintPk,
       gasTank.publicKey,
