@@ -1,5 +1,5 @@
-import { getKeypair } from "./../../utils/general";
-import { getGasTank, getDevnetConnection } from "../../utils/general";
+import { getKeypair } from "../../../utils/general";
+import { getGasTank, getDevnetConnection } from "../../../utils/general";
 import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import bs58 from "bs58";
@@ -32,7 +32,7 @@ import {
   withCreateMint,
   withMintTo,
   getTimestampFromDays,
-} from "../../utils/realmUtils";
+} from "../../../utils/realmUtils";
 
 import { MintLayout } from "@solana/spl-token";
 import { BN } from "@project-serum/anchor";
@@ -46,7 +46,6 @@ const connection = getDevnetConnection();
 const pubkeySchema = z.string().transform((v) => new PublicKey(v));
 
 const CreateRealmSchema = z.object({
-  communityName: z.string(),
   yesVoteThreshold: z.number(),
   councilMemberPks: z.array(pubkeySchema),
   walletPk: pubkeySchema,
@@ -54,11 +53,13 @@ const CreateRealmSchema = z.object({
 
 const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
-    const { walletPk, communityName, yesVoteThreshold, councilMemberPks } =
+    const { walletPk, yesVoteThreshold, councilMemberPks } =
       CreateRealmSchema.parse(req.body);
 
+    const { community: communityName } = req.query;
+
     const LHT = getKeypair();
-    const walletInfo = await getGasTank(communityName);
+    const walletInfo = await getGasTank(communityName as string);
     const gasTank: Keypair = Keypair.fromSecretKey(
       bs58.decode(walletInfo.gasTankSecretKey)
     );
