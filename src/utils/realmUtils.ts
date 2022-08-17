@@ -15,6 +15,7 @@ import {
   createAssociatedTokenAccountInstruction,
   createInitializeMintInstruction,
   createMintToInstruction,
+  getAccount,
   getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
@@ -40,7 +41,7 @@ export const getRealmInfo = async (realmPk: PublicKey, proposer: PublicKey) => {
   const connection = getDevnetConnection();
   const realmInfo = await getRealm(connection, realmPk);
   // get realm, get council mint, using that get governance account then get treasury wallet.
-  const COUNCIL_MINT = realmInfo.account.config.councilMint;
+  const COUNCIL_MINT = realmInfo.account.config.councilMint!;
   const governanceInfo = await getGovernanceAccounts(
     connection,
     TEST_PROGRAM_ID,
@@ -204,14 +205,18 @@ export const withCreateAssociatedTokenAccount = async (
   ownerPk: PublicKey,
   payerPk: PublicKey
 ) => {
+  const connection = getDevnetConnection();
   const ataPk = await getAssociatedTokenAddress(
     mintPk,
     ownerPk // owner
   );
-
-  instructions.push(
-    createAssociatedTokenAccountInstruction(payerPk, ataPk, ownerPk, mintPk)
-  );
+  try {
+    await getAccount(connection, ataPk);
+  } catch (_) {
+    instructions.push(
+      createAssociatedTokenAccountInstruction(payerPk, ataPk, ownerPk, mintPk)
+    );
+  }
 
   return ataPk;
 };
