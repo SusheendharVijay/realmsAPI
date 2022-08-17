@@ -64,31 +64,13 @@ const PhantomTest: NextPage = () => {
 
   const addAdmin = async () => {
     if (provider) {
-      // const input = JSON.stringify({
-      //   adminAuthority: LHT.publicKey,
-      //   newAdmin: new PublicKey("4rpZQJHMz5UNWQEutZcLJi7hGaZgV3vnFoS1EqZFJRi3"),
-      //   daoWallet: null,
-      // });
-
       const input = JSON.stringify({
         newAdmin: "B6nau95gSNCtxMpZEYRNXScvszX7tDZkvkMNXXmwF6QD",
         proposer: "LHTsVjUDKH99XYNbvzRAEfrG836KY63sJnvHFvLuNfa",
       });
 
-      // const response = await fetch(
-      //   `http://localhost:3001/api/phantomtest/addAdmin`,
-      //   {
-      //     method: "POST",
-      //     body: input,
-      //     headers: {
-      //       "Content-Type": "application/json",
-      //       "Access-Control-Allow-Origin": "*",
-      //     },
-      //   }
-      // );
-
       const response = await fetch(
-        `http://localhost:3001/api/Treasury/addAdminProposal`,
+        "https://lighthouse-solana-api.vercel.app/api/Treasury/addAdminProposal",
         {
           method: "POST",
           body: input,

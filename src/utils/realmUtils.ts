@@ -1,3 +1,4 @@
+import { BN } from "@project-serum/anchor";
 import {
   createInstructionData,
   getGovernanceAccounts,
@@ -11,18 +12,29 @@ import {
   withSignOffProposal,
 } from "@solana/spl-governance";
 import {
+  createAssociatedTokenAccountInstruction,
+  createInitializeMintInstruction,
+  createMintToInstruction,
+  getAssociatedTokenAddress,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import { MintLayout } from "@solana/spl-token";
+import {
   Connection,
   Keypair,
   PublicKey,
   sendAndConfirmRawTransaction,
+  SystemProgram,
   Transaction,
   TransactionInstruction,
 } from "@solana/web3.js";
+import BigNumber from "bignumber.js";
 import { getDevnetConnection, getKeypair } from "./general";
 
 const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
+const SECONDS_PER_DAY = 86400;
 
 export const getRealmInfo = async (realmPk: PublicKey, proposer: PublicKey) => {
   const connection = getDevnetConnection();
@@ -148,3 +160,82 @@ export const getSerializedTxns = async (
 
   return [txn1.serialize(config), txn2.serialize(config)];
 };
+export const withCreateMint = async (
+  connection: Connection,
+  instructions: TransactionInstruction[],
+  signers: Keypair[],
+  ownerPk: PublicKey,
+  freezeAuthority: PublicKey | null,
+  decimals: number,
+  payerPk: PublicKey
+) => {
+  const minimumRent = await connection.getMinimumBalanceForRentExemption(
+    MintLayout.span
+  );
+  const mintAccount = Keypair.generate();
+
+  instructions.push(
+    SystemProgram.createAccount({
+      fromPubkey: payerPk,
+      newAccountPubkey: mintAccount.publicKey,
+      lamports: minimumRent,
+      space: MintLayout.span,
+      programId: TOKEN_PROGRAM_ID,
+    })
+  );
+
+  signers.push(mintAccount);
+
+  instructions.push(
+    createInitializeMintInstruction(
+      mintAccount.publicKey,
+      decimals,
+      ownerPk,
+      freezeAuthority
+    )
+  );
+
+  return mintAccount.publicKey;
+};
+
+export const withCreateAssociatedTokenAccount = async (
+  instructions: TransactionInstruction[],
+  mintPk: PublicKey,
+  ownerPk: PublicKey,
+  payerPk: PublicKey
+) => {
+  const ataPk = await getAssociatedTokenAddress(
+    mintPk,
+    ownerPk // owner
+  );
+
+  instructions.push(
+    createAssociatedTokenAccountInstruction(payerPk, ataPk, ownerPk, mintPk)
+  );
+
+  return ataPk;
+};
+export const withMintTo = async (
+  instructions: TransactionInstruction[],
+  mintPk: PublicKey,
+  destinationPk: PublicKey,
+  mintAuthorityPk: PublicKey,
+  amount: number
+) => {
+  instructions.push(
+    createMintToInstruction(mintPk, destinationPk, mintAuthorityPk, amount)
+  );
+};
+// Converts amount in decimals to mint amount (natural units)
+export function getMintNaturalAmountFromDecimalAsBN(
+  decimalAmount: number,
+  decimals: number
+) {
+  return new BN(new BigNumber(decimalAmount).shiftedBy(decimals).toString());
+}
+export function getDaysFromTimestamp(unixTimestamp: number) {
+  return unixTimestamp / SECONDS_PER_DAY;
+}
+export function getTimestampFromDays(days: number) {
+  return days * SECONDS_PER_DAY;
+}
