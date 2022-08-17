@@ -285,7 +285,7 @@ const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
     txn2.partialSign(gasTank);
 
     return res.status(200).json({
-      serializedTxn: [
+      serializedTxns: [
         txn2.serialize({
           requireAllSignatures: false,
           verifySignatures: true,
