@@ -5,11 +5,8 @@ import { z } from "zod";
 import bs58 from "bs58";
 
 import {
-  withCreateProposal,
-  VoteType,
   withCreateRealm,
   MintMaxVoteWeightSource,
-  TOKEN_PROGRAM_ID,
   GovernanceConfig,
   VoteThresholdPercentage,
   VoteTipping,
@@ -20,32 +17,24 @@ import {
   withCreateNativeTreasury,
   withSetRealmAuthority,
   SetRealmAuthorityAction,
+  getNativeTreasuryAddress,
 } from "@solana/spl-governance";
 import {
   PublicKey,
   Transaction,
   TransactionInstruction,
   Keypair,
-  SystemProgram,
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import {
   getMintNaturalAmountFromDecimalAsBN,
-  getRealmInfo,
-  getSerializedTxns,
-  insertInstructionsAndSignOff,
   withCreateAssociatedTokenAccount,
   withCreateMint,
   withMintTo,
-  getDaysFromTimestamp,
   getTimestampFromDays,
 } from "../../utils/realmUtils";
 
-import {
-  createInitializeMintInstruction,
-  MintLayout,
-  getMinimumBalanceForRentExemptMint,
-} from "@solana/spl-token";
+import { MintLayout } from "@solana/spl-token";
 import { BN } from "@project-serum/anchor";
 
 const TEST_PROGRAM_ID = new PublicKey(
@@ -53,10 +42,6 @@ const TEST_PROGRAM_ID = new PublicKey(
 );
 
 const connection = getDevnetConnection();
-
-const InstructionSchema = z.object({
-  serializedTxn: z.array(z.number()),
-});
 
 const pubkeySchema = z.string().transform((v) => new PublicKey(v));
 
@@ -224,7 +209,7 @@ const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
       walletPk
     );
 
-    await withCreateMintGovernance(
+    const councilMintGovPk = await withCreateMintGovernance(
       realmInstructions,
       TEST_PROGRAM_ID,
       PROGRAM_VERSION_V2,
@@ -237,6 +222,12 @@ const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
       gasTank.publicKey,
       walletPk
     );
+
+    const daoWallet = await getNativeTreasuryAddress(
+      TEST_PROGRAM_ID,
+      communityMintGovPk
+    );
+
     await withCreateNativeTreasury(
       realmInstructions,
       TEST_PROGRAM_ID,
@@ -261,6 +252,7 @@ const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
     console.log("communityMintGovPk", communityMintGovPk.toBase58());
     console.log("tokenOwnerRecordPk", tokenOwnerRecordPk?.toBase58());
     console.log("gasTank", gasTank.publicKey.toBase58());
+    console.log("daoWallet", daoWallet.toBase58());
     // console.log("realmsigners", realmSigners);
 
     const txn1 = new Transaction();
@@ -298,6 +290,9 @@ const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
           verifySignatures: true,
         }),
       ],
+      realmPk: realmPk.toBase58(),
+      councilMintGovPk: councilMintGovPk.toBase58(),
+      daoWallet: daoWallet.toBase58(),
     });
   } catch (error) {
     console.log(error);
