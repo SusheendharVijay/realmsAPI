@@ -36,6 +36,7 @@ import {
 
 import { MintLayout } from "@solana/spl-token";
 import { BN } from "@project-serum/anchor";
+import NextCors from "nextjs-cors";
 
 const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
@@ -52,6 +53,12 @@ const CreateRealmSchema = z.object({
 });
 
 const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
+  await NextCors(req, res, {
+    // Options
+    methods: ["POST"],
+    origin: "*",
+    optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
+  });
   try {
     const { walletPk, yesVoteThreshold, councilMemberPks } =
       CreateRealmSchema.parse(req.body);
