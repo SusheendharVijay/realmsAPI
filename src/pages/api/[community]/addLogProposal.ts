@@ -29,7 +29,7 @@ const InstructionSchema = z.object({
 });
 const AddLogSchema = z.object({
   receiver: z.string().transform((v) => new PublicKey(v)),
-  multisigRealm: z.string().transform((v) => new PublicKey(v)),
+  realmPk: z.string().transform((v) => new PublicKey(v)),
   amount: z.number(),
   reason: z.string(),
   tags: z.string(),
@@ -46,7 +46,7 @@ const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       tags,
       pointsBreakdown,
       proposer,
-      multisigRealm: MULTISIG_REALM,
+      realmPk: MULTISIG_REALM,
     } = AddLogSchema.parse(req.body);
 
     const { community } = req.query;

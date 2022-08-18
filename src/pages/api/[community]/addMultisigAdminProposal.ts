@@ -36,7 +36,7 @@ const pubkeySchema = z.string().transform((v) => new PublicKey(v));
 const AddAdminSchema = z.object({
   newAdmin: pubkeySchema,
   proposer: pubkeySchema,
-  multisigRealm: pubkeySchema,
+  realmPk: pubkeySchema,
 });
 
 const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
@@ -44,7 +44,7 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     const {
       newAdmin,
       proposer,
-      multisigRealm: MULTISIG_REALM,
+      realmPk: MULTISIG_REALM,
     } = AddAdminSchema.parse(req.body);
 
     const { community } = req.query;
