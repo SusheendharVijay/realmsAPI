@@ -3,7 +3,13 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import bs58 from "bs58";
 
-import { withCreateProposal, VoteType } from "@solana/spl-governance";
+import {
+  withCreateProposal,
+  VoteType,
+  GovernanceConfig,
+  createSetGovernanceConfig,
+  VoteThresholdPercentage,
+} from "@solana/spl-governance";
 import {
   PublicKey,
   Transaction,
@@ -27,27 +33,22 @@ const connection = getDevnetConnection();
 const InstructionSchema = z.object({
   serializedTxn: z.array(z.number()),
 });
-const AddLogSchema = z.object({
-  receiver: z.string().transform((v) => new PublicKey(v)),
-  realmPk: z.string().transform((v) => new PublicKey(v)),
-  amount: z.number(),
-  reason: z.string(),
-  tags: z.string(),
-  pointsBreakdown: z.string(),
+const ChangeConfigSchema = z.object({
   proposer: z.string().transform((v) => new PublicKey(v)),
+  realmPk: z.string().transform((v) => new PublicKey(v)),
+  newYesVotePercentage: z.number().gt(0).lt(100),
 });
 
-const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
+const changeConfigProposal = async (
+  req: NextApiRequest,
+  res: NextApiResponse
+) => {
   try {
     const {
-      receiver,
-      amount,
-      reason,
-      tags,
-      pointsBreakdown,
+      newYesVotePercentage,
       proposer,
       realmPk: MULTISIG_REALM,
-    } = AddLogSchema.parse(req.body);
+    } = ChangeConfigSchema.parse(req.body);
 
     const { community } = req.query;
 
@@ -59,9 +60,9 @@ const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     const {
       COUNCIL_MINT,
       COUNCIL_MINT_GOVERNANCE,
-      multisigAdmin,
       proposalCount,
       tokenOwnerRecordPk,
+      governance,
     } = await getRealmInfo(MULTISIG_REALM, proposer);
 
     const proposalInstructions: TransactionInstruction[] = [];
@@ -74,8 +75,8 @@ const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       MULTISIG_REALM,
       COUNCIL_MINT_GOVERNANCE,
       tokenOwnerRecordPk,
-      `Add an attestation for ${receiver}`,
-      `Reason: ${reason}, amount: ${amount} Tags: ${tags}, Points Breakdown: ${pointsBreakdown}`,
+      `Change governance config`,
+      `Change required yes vote percentage to ${newYesVotePercentage}%`,
       COUNCIL_MINT!,
       proposer,
       proposalCount,
@@ -85,34 +86,22 @@ const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       gasTank.publicKey
     );
 
-    const input = JSON.stringify({
-      receiver: receiver.toBase58(),
-      admin: multisigAdmin.toBase58(),
-      amount: amount,
-      reason: reason,
-      tags: tags,
-      pointsBreakdown: pointsBreakdown,
-      daoWallet: multisigAdmin.toBase58(),
+    const newConfig = new GovernanceConfig({
+      ...governance.account.config,
+      voteThresholdPercentage: new VoteThresholdPercentage({
+        value: newYesVotePercentage,
+      }),
     });
 
-    const response = await fetch(
-      `https://lighthouse-solana-api.vercel.app/api/${community}/addLog`,
-      {
-        method: "POST",
-        body: input,
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const instruction = createSetGovernanceConfig(
+      TEST_PROGRAM_ID,
+      COUNCIL_MINT_GOVERNANCE,
+      newConfig
     );
-
-    const instructions = InstructionSchema.parse(await response.json());
-
-    const parsedTxn = Transaction.from(instructions.serializedTxn);
 
     await insertInstructionsAndSignOff(
       insertInstructions,
-      parsedTxn.instructions,
+      [instruction],
       COUNCIL_MINT_GOVERNANCE,
       MULTISIG_REALM,
       proposalAddress,
@@ -139,4 +128,4 @@ const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 };
 
-export default addLogProposal;
+export default changeConfigProposal;

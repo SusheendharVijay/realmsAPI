@@ -106,7 +106,7 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
 
     await insertInstructionsAndSignOff(
       insertInstructions,
-      new Transaction().add(...mintInstructions),
+      mintInstructions,
       COUNCIL_MINT_GOVERNANCE,
       MULTISIG_REALM,
       proposalAddress,

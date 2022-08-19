@@ -47,7 +47,7 @@ const connection = getDevnetConnection();
 const pubkeySchema = z.string().transform((v) => new PublicKey(v));
 
 const CreateRealmSchema = z.object({
-  yesVoteThreshold: z.number(),
+  yesVoteThreshold: z.number().gt(0).lt(100),
   councilMemberPks: z.array(pubkeySchema),
   walletPk: pubkeySchema,
 });

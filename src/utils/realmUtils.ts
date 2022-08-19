@@ -32,7 +32,7 @@ import {
 import BigNumber from "bignumber.js";
 import { getDevnetConnection, getKeypair } from "./general";
 
-const TEST_PROGRAM_ID = new PublicKey(
+export const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
 const SECONDS_PER_DAY = 86400;
@@ -69,12 +69,13 @@ export const getRealmInfo = async (realmPk: PublicKey, proposer: PublicKey) => {
     multisigAdmin,
     proposalCount: governance.account.proposalCount,
     tokenOwnerRecordPk: tokenOwnerRecord[0]!.pubkey,
+    governance,
   };
 };
 
 export const insertInstructionsAndSignOff = async (
   insertInstructions: TransactionInstruction[],
-  parsedTxn: Transaction,
+  instructions: TransactionInstruction[],
   COUNCIL_MINT_GOVERNANCE: PublicKey,
   MULTISIG_REALM: PublicKey,
   proposalAddress: PublicKey,
@@ -82,7 +83,7 @@ export const insertInstructionsAndSignOff = async (
   proposer: PublicKey,
   gasTankPk: PublicKey
 ) => {
-  for (let ins of parsedTxn.instructions) {
+  for (let ins of instructions) {
     const instructionData = createInstructionData(ins);
 
     await withInsertTransaction(
@@ -93,7 +94,7 @@ export const insertInstructionsAndSignOff = async (
       proposalAddress,
       tokenOwnerRecordPk,
       proposer,
-      parsedTxn.instructions.indexOf(ins),
+      instructions.indexOf(ins),
       0,
       0,
       [instructionData],
@@ -145,6 +146,8 @@ export const getSerializedTxns = async (
     requireAllSignatures: false,
     verifySignatures: true,
   };
+
+  // Code to test the serialization of a transaction
 
   // txn1.partialSign(LHT);
   // txn2.partialSign(LHT);
