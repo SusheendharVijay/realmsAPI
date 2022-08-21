@@ -6,6 +6,7 @@ import { getGasTank, getDevnetConnection } from "../../../utils/general";
 import { NextApiRequest, NextApiResponse } from "next";
 import { z } from "zod";
 import bs58 from "bs58";
+import { Ok, Err, Result } from "ts-results";
 
 import { withCreateProposal, VoteType } from "@solana/spl-governance";
 import {
@@ -58,13 +59,18 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     //   connection,
     //   TEST_PROGRAM_ID
     // );
+    const infoOrError = await getRealmInfo(MULTISIG_REALM, proposer);
+    if (infoOrError.err) {
+      return res.status(400).json({ error: infoOrError.val });
+    }
+
     const {
       COUNCIL_MINT,
       COUNCIL_MINT_GOVERNANCE,
       multisigAdmin,
       proposalCount,
       tokenOwnerRecordPk,
-    } = await getRealmInfo(MULTISIG_REALM, proposer);
+    } = infoOrError.val;
 
     const proposalInstructions: TransactionInstruction[] = [];
     const insertInstructions: TransactionInstruction[] = [];

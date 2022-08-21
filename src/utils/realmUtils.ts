@@ -6,6 +6,7 @@ import {
   getRealm,
   getSignatoryRecordAddress,
   Governance,
+  ProgramAccount,
   pubkeyFilter,
   TokenOwnerRecord,
   withInsertTransaction,
@@ -31,15 +32,35 @@ import {
 } from "@solana/web3.js";
 import BigNumber from "bignumber.js";
 import { getDevnetConnection, getKeypair } from "./general";
+import { Ok, Err, Result } from "ts-results";
 
 export const TEST_PROGRAM_ID = new PublicKey(
   "GovER5Lthms3bLBqWub97yVrMmEogzX7xNjdXpPPCVZw"
 );
 const SECONDS_PER_DAY = 86400;
 
-export const getRealmInfo = async (realmPk: PublicKey, proposer: PublicKey) => {
+interface RealmInfo {
+  COUNCIL_MINT: PublicKey;
+  COUNCIL_MINT_GOVERNANCE: PublicKey;
+  multisigAdmin: PublicKey;
+  proposalCount: number;
+  tokenOwnerRecordPk: PublicKey;
+  governance: ProgramAccount<Governance>;
+}
+
+export const getRealmInfo = async (
+  realmPk: PublicKey,
+  proposer: PublicKey
+): Promise<
+  Result<RealmInfo, "realm not found" | "proposer is not a member of the realm">
+> => {
   const connection = getDevnetConnection();
-  const realmInfo = await getRealm(connection, realmPk);
+  let realmInfo;
+  try {
+    realmInfo = await getRealm(connection, realmPk);
+  } catch (_) {
+    return Err("realm not found");
+  }
   // get realm, get council mint, using that get governance account then get treasury wallet.
   const COUNCIL_MINT = realmInfo.account.config.councilMint!;
   const governanceInfo = await getGovernanceAccounts(
@@ -62,15 +83,17 @@ export const getRealmInfo = async (realmPk: PublicKey, proposer: PublicKey) => {
     TokenOwnerRecord,
     [pubkeyFilter(1, realmPk)!, pubkeyFilter(65, proposer)!]
   );
+  if (!tokenOwnerRecord[0])
+    return new Err("proposer is not a member of the realm");
 
-  return {
+  return Ok({
     COUNCIL_MINT,
     COUNCIL_MINT_GOVERNANCE,
     multisigAdmin,
     proposalCount: governance.account.proposalCount,
     tokenOwnerRecordPk: tokenOwnerRecord[0]!.pubkey,
     governance,
-  };
+  });
 };
 
 export const insertInstructionsAndSignOff = async (
