@@ -53,13 +53,17 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     //   connection,
     //   TEST_PROGRAM_ID
     // );
+    const realmInfo = await getRealmInfo(MULTISIG_REALM, proposer);
+    if (realmInfo.err) {
+      return res.status(400).json({ error: realmInfo.val.message });
+    }
     const {
       COUNCIL_MINT,
       COUNCIL_MINT_GOVERNANCE,
       multisigAdmin,
       proposalCount,
       tokenOwnerRecordPk,
-    } = await getRealmInfo(MULTISIG_REALM, proposer);
+    } = realmInfo.val;
 
     const proposalInstructions: TransactionInstruction[] = [];
     const insertInstructions: TransactionInstruction[] = [];

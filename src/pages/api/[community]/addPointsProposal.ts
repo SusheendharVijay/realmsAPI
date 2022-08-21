@@ -51,14 +51,17 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     const gasTank: Keypair = Keypair.fromSecretKey(
       bs58.decode(walletInfo.gasTankSecretKey)
     );
-
+    const realmInfo = await getRealmInfo(MULTISIG_REALM, proposer);
+    if (realmInfo.err) {
+      return res.status(400).json({ error: realmInfo.val.message });
+    }
     const {
       COUNCIL_MINT,
       COUNCIL_MINT_GOVERNANCE,
       multisigAdmin,
       proposalCount,
       tokenOwnerRecordPk,
-    } = await getRealmInfo(MULTISIG_REALM, proposer);
+    } = realmInfo.val;
 
     const proposalInstructions: TransactionInstruction[] = [];
     const insertInstructions: TransactionInstruction[] = [];

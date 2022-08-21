@@ -51,24 +51,26 @@ interface RealmInfo {
 export const getRealmInfo = async (
   realmPk: PublicKey,
   proposer: PublicKey
-): Promise<
-  Result<RealmInfo, "realm not found" | "proposer is not a member of the realm">
-> => {
+): Promise<Result<RealmInfo, Error>> => {
   const connection = getDevnetConnection();
   let realmInfo;
   try {
     realmInfo = await getRealm(connection, realmPk);
   } catch (_) {
-    return Err("realm not found");
+    return Err(new Error("realm not found"));
   }
-  // get realm, get council mint, using that get governance account then get treasury wallet.
-  const COUNCIL_MINT = realmInfo.account.config.councilMint!;
+  if (!realmInfo.account.config.councilMint) {
+    return Err(new Error("realm does not have a council mint"));
+  }
+  const COUNCIL_MINT = realmInfo.account.config.councilMint;
+
   const governanceInfo = await getGovernanceAccounts(
     connection,
     TEST_PROGRAM_ID,
     Governance,
     [pubkeyFilter(33, COUNCIL_MINT)!]
   );
+
   const governance = governanceInfo[0]!;
 
   const COUNCIL_MINT_GOVERNANCE = governance.pubkey;
@@ -84,7 +86,7 @@ export const getRealmInfo = async (
     [pubkeyFilter(1, realmPk)!, pubkeyFilter(65, proposer)!]
   );
   if (!tokenOwnerRecord[0])
-    return new Err("proposer is not a member of the realm");
+    return new Err(new Error("proposer is not a member of the realm"));
 
   return Ok({
     COUNCIL_MINT,

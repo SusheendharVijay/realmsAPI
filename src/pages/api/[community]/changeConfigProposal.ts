@@ -57,13 +57,17 @@ const changeConfigProposal = async (
       bs58.decode(walletInfo.gasTankSecretKey)
     );
 
+    const realmInfo = await getRealmInfo(MULTISIG_REALM, proposer);
+    if (realmInfo.err) {
+      return res.status(400).json({ error: realmInfo.val.message });
+    }
     const {
       COUNCIL_MINT,
       COUNCIL_MINT_GOVERNANCE,
       proposalCount,
       tokenOwnerRecordPk,
       governance,
-    } = await getRealmInfo(MULTISIG_REALM, proposer);
+    } = realmInfo.val;
 
     const proposalInstructions: TransactionInstruction[] = [];
     const insertInstructions: TransactionInstruction[] = [];

@@ -61,7 +61,7 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
     // );
     const infoOrError = await getRealmInfo(MULTISIG_REALM, proposer);
     if (infoOrError.err) {
-      return res.status(400).json({ error: infoOrError.val });
+      return res.status(400).json({ error: infoOrError.val.message });
     }
 
     const {
