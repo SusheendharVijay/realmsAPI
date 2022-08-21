@@ -50,8 +50,11 @@ const addPointsProposal = async (req: NextApiRequest, res: NextApiResponse) => {
 
     const { community } = req.query;
     const walletInfo = await getGasTank(community as string);
+    if (walletInfo.err) {
+      return res.status(400).json({ error: walletInfo.val.message });
+    }
     const gasTank: Keypair = Keypair.fromSecretKey(
-      bs58.decode(walletInfo.gasTankSecretKey)
+      bs58.decode(walletInfo.val.gasTankSecretKey)
     );
 
     // TODO: hardcoding version as 2 for now

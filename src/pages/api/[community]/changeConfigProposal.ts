@@ -30,9 +30,6 @@ const TEST_PROGRAM_ID = new PublicKey(
 
 const connection = getDevnetConnection();
 
-const InstructionSchema = z.object({
-  serializedTxn: z.array(z.number()),
-});
 const ChangeConfigSchema = z.object({
   proposer: z.string().transform((v) => new PublicKey(v)),
   realmPk: z.string().transform((v) => new PublicKey(v)),
@@ -53,8 +50,11 @@ const changeConfigProposal = async (
     const { community } = req.query;
 
     const walletInfo = await getGasTank(community as string);
+    if (walletInfo.err) {
+      return res.status(400).json({ error: walletInfo.val.message });
+    }
     const gasTank: Keypair = Keypair.fromSecretKey(
-      bs58.decode(walletInfo.gasTankSecretKey)
+      bs58.decode(walletInfo.val.gasTankSecretKey)
     );
 
     const realmInfo = await getRealmInfo(MULTISIG_REALM, proposer);

@@ -1,7 +1,9 @@
+import { ProgramAccount } from "@project-serum/anchor";
 import {
   getGovernanceAccounts,
   getRealm,
   pubkeyFilter,
+  Realm,
   TokenOwnerRecord,
 } from "@solana/spl-governance";
 import { PublicKey } from "@solana/web3.js";
@@ -22,7 +24,13 @@ const getMultisigStewards = async (
     const connection = getDevnetConnection();
     const { realmPk } = GetStewardsSchema.parse(req.body);
 
-    const realm = await getRealm(connection, realmPk);
+    let realm;
+    try {
+      realm = await getRealm(connection, realmPk);
+    } catch (_) {
+      return res.status(400).json({ error: "realm not found" });
+    }
+
     const tokenOwnerRecords = await getGovernanceAccounts(
       connection,
       TEST_PROGRAM_ID,

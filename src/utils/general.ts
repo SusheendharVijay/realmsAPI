@@ -1,5 +1,6 @@
 import { Connection, clusterApiUrl, Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
+import { Err, Ok, Result } from "ts-results";
 import { z } from "zod";
 import { WalletInfoSchema } from "../../lib/types";
 
@@ -19,13 +20,19 @@ export const getDevnetConnection = (): Connection => {
 
   return connection;
 };
-export const getGasTank = async (community: string): Promise<IWalletInfo> => {
+export const getGasTank = async (
+  community: string
+): Promise<Result<IWalletInfo, Error>> => {
   const res = await fetch(
     `https://lighthouse-solana-api.vercel.app/api/${community}/info?key=${process.env.API_KEY}`
   );
+  const data = await res.json();
+  if (res.status >= 400) {
+    return Err(new Error(data.error));
+  }
 
   const info = WalletInfoSchema.parse(await res.json());
-  return info;
+  return Ok(info);
 };
 
 export const getKeypair = (): Keypair => {
