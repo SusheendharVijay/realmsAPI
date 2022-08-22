@@ -9,6 +9,9 @@ import {
   Transaction,
   TransactionInstruction,
   Keypair,
+  SystemProgram,
+  LAMPORTS_PER_SOL,
+  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 
 import { getDevnetConnection } from "../../../utils/general";
@@ -92,6 +95,17 @@ const addLogProposal = async (req: NextApiRequest, res: NextApiResponse) => {
       true,
       gasTank.publicKey
     );
+    // Topping up the dao wallet, as sometimes the proposal fails to go through if it fails once with an empty dao wallet.
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: gasTank.publicKey,
+        toPubkey: multisigAdmin,
+        lamports: 0.01 * LAMPORTS_PER_SOL, // number of SOL to send
+      })
+    );
+    const tx = await sendAndConfirmTransaction(connection, transaction, [
+      gasTank,
+    ]);
 
     const input = JSON.stringify({
       receiver: receiver.toBase58(),
