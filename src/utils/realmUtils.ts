@@ -234,6 +234,7 @@ export const withCreateAssociatedTokenAccount = async (
   payerPk: PublicKey
 ) => {
   const connection = getDevnetConnection();
+  // TODO: Should we allow owner off the curve? If yes then just add true to the arguments of getAssociatedTokenAddress
   const ataPk = await getAssociatedTokenAddress(
     mintPk,
     ownerPk // owner
