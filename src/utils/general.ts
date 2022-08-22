@@ -31,7 +31,8 @@ export const getGasTank = async (
     return Err(new Error(data.error));
   }
 
-  const info = WalletInfoSchema.parse(await res.json());
+  const info = WalletInfoSchema.parse(data);
+
   return Ok(info);
 };
 
