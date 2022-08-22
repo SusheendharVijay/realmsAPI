@@ -236,7 +236,7 @@ const createRealm = async (req: NextApiRequest, res: NextApiResponse) => {
 
     const daoWallet = await getNativeTreasuryAddress(
       TEST_PROGRAM_ID,
-      communityMintGovPk
+      councilMintGovPk
     );
 
     await withCreateNativeTreasury(
