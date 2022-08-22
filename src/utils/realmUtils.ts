@@ -31,7 +31,7 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import BigNumber from "bignumber.js";
-import { getDevnetConnection, getKeypair } from "./general";
+import { getBobKeypair, getDevnetConnection, getKeypair } from "./general";
 import { Ok, Err, Result } from "ts-results";
 
 export const TEST_PROGRAM_ID = new PublicKey(
@@ -174,8 +174,9 @@ export const getSerializedTxns = async (
 
   // Code to test the serialization of a transaction
 
-  // txn1.partialSign(LHT);
-  // txn2.partialSign(LHT);
+  // const bob = getBobKeypair();
+  // txn1.partialSign(bob);
+  // txn2.partialSign(bob);
 
   // const sig1 = await sendAndConfirmRawTransaction(
   //   connection,

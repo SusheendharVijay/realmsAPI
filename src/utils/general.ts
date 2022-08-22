@@ -43,3 +43,9 @@ export const getKeypair = (): Keypair => {
 
   return LHT;
 };
+export const getBobKeypair = (): Keypair => {
+  const bob: Keypair = Keypair.fromSecretKey(
+    bs58.decode(process.env.ALICE_SECRET_KEY as string)
+  );
+  return bob;
+};
