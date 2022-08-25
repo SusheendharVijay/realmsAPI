@@ -123,6 +123,7 @@ const changeConfigProposal = async (
 
     return res.status(200).json({
       serializedTxns,
+      proposalAddress,
     });
   } catch (e) {
     console.log(e);
