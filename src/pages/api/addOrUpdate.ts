@@ -91,12 +91,14 @@ const addOrUpdate = async (req: NextApiRequest, res: NextApiResponse) => {
       realmOwner,
       realmKey
     );
+    console.log("allGovernancesRaw", allGovernancesRaw);
 
     console.log("Got all governances for the realm ✅");
     // filter out gov's without proposals-------------------------------------
-    const governanceWithProposals = allGovernancesRaw.filter(
-      (govern) => govern.account.proposalCount > 0
-    );
+    const governanceWithProposals = allGovernancesRaw;
+    // .filter(
+    // (govern) => govern.account.proposalCount > 0
+    // );
 
     console.log("Filtered empty governances ✅");
     console.log(`Found ${governanceWithProposals.length} governance accounts`);
